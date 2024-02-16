@@ -5,7 +5,7 @@ go 1.21.3
 require (
 	cloud.google.com/go/compute v1.23.3
 	github.com/BurntSushi/toml v1.3.2
-	github.com/cloudbase/garm-provider-common v0.1.2-0.20240111235646-a9efac12b060
+	github.com/cloudbase/garm-provider-common v0.1.2-0.20240216125425-bbe4930a1ebf
 	golang.org/x/oauth2 v0.16.0
 	google.golang.org/api v0.156.0
 	google.golang.org/protobuf v1.32.0
