@@ -10,8 +10,8 @@ github.com/BurntSushi/toml v1.3.2 h1:o7IhLm0Msx3BaB+n3Ag7L8EVlByGnpq14C4YWiu/gL8
 github.com/BurntSushi/toml v1.3.2/go.mod h1:CxXYINrC8qIiEnFrOxCa7Jy5BFHlXnUU2pbicEuybxQ=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
-github.com/cloudbase/garm-provider-common v0.1.2-0.20240111235646-a9efac12b060 h1:R1x91MisDJq61uioMULPycnQo6P4HWFyR3Pa9ePz8c4=
-github.com/cloudbase/garm-provider-common v0.1.2-0.20240111235646-a9efac12b060/go.mod h1:igxJRT3OlykERYc6ssdRQXcb+BCaeSfnucg6I0OSoDc=
+github.com/cloudbase/garm-provider-common v0.1.2-0.20240216125425-bbe4930a1ebf h1:E5TVBkaxlX6hoBo5RVEWumjkjT9QM7Y421gGUVJg7so=
+github.com/cloudbase/garm-provider-common v0.1.2-0.20240216125425-bbe4930a1ebf/go.mod h1:igxJRT3OlykERYc6ssdRQXcb+BCaeSfnucg6I0OSoDc=
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=

@@ -54,8 +54,6 @@ This will create a new Windows runner pool for the repo with ID `26ae13a1-13e9-4
 
 Here is an example for a Linux pool that uses the image specified by its image name:
 
-**NOTE**: The provider supports only **UBUNTU** and **DEBIAN** images for Linux pools at the moment.
-
 ```bash
 garm-cli pool create \
     --os-type linux \
