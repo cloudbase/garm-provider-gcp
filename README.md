@@ -110,6 +110,10 @@ To this end, this provider supports the following extra specs schema:
             "items": {
                 "type": "string"
             }
+        },
+        "source_snapshot": {
+            "type": "string",
+            "description": "The source snapshot to create this disk."
         }
     }
 }
@@ -124,7 +128,8 @@ An example of extra specs json would look like this:
     "subnet_id": "projects/garm-testing/regions/europe-west1/subnetworks/garm",
     "nic_type": "VIRTIO_NET",
     "custom_labels": {"environment":"production","project":"myproject"},
-    "network_tags": ["web-server", "production"]
+    "network_tags": ["web-server", "production"],
+    "source_snapshot": "projects/garm-testing/global/snapshots/garm-snapshot"
 }
 ```
 

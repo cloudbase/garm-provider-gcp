@@ -83,12 +83,13 @@ func (e *extraSpecs) Validate() error {
 }
 
 type extraSpecs struct {
-	DiskSize     int64             `json:"disksize,omitempty"`
-	NetworkID    string            `json:"network_id,omitempty"`
-	SubnetworkID string            `json:"subnetwork_id,omitempty"`
-	NicType      string            `json:"nic_type,omitempty"`
-	CustomLabels map[string]string `json:"custom_labels,omitempty"`
-	NetworkTags  []string          `json:"network_tags,omitempty"`
+	DiskSize       int64             `json:"disksize,omitempty"`
+	NetworkID      string            `json:"network_id,omitempty"`
+	SubnetworkID   string            `json:"subnetwork_id,omitempty"`
+	NicType        string            `json:"nic_type,omitempty"`
+	CustomLabels   map[string]string `json:"custom_labels,omitempty"`
+	NetworkTags    []string          `json:"network_tags,omitempty"`
+	SourceSnapshot string            `json:"source_snapshot,omitempty"`
 }
 
 func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapInstance, controllerID string) (*RunnerSpec, error) {
@@ -136,6 +137,7 @@ type RunnerSpec struct {
 	DiskSize        int64
 	CustomLabels    map[string]string
 	NetworkTags     []string
+	SourceSnapshot  string
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
@@ -156,6 +158,9 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	}
 	if len(extraSpecs.NetworkTags) > 0 {
 		r.NetworkTags = extraSpecs.NetworkTags
+	}
+	if extraSpecs.SourceSnapshot != "" {
+		r.SourceSnapshot = extraSpecs.SourceSnapshot
 	}
 }
 
