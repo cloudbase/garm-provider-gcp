@@ -68,6 +68,17 @@ func (e *extraSpecs) Validate() error {
 			return fmt.Errorf("custom label key '%s' and value '%s' must be lowercase", k, v)
 		}
 	}
+	if len(e.NetworkTags) > 64 {
+		return fmt.Errorf("network tags cannot exceed 64 items")
+	}
+	for _, tag := range e.NetworkTags {
+		if len(tag) > 63 {
+			return fmt.Errorf("network tag '%s' exceeds 63 characters", tag)
+		}
+		if !utils.IsLower(tag) {
+			return fmt.Errorf("network tag '%s' must be lowercase", tag)
+		}
+	}
 	return nil
 }
 
@@ -77,6 +88,7 @@ type extraSpecs struct {
 	SubnetworkID string            `json:"subnetwork_id,omitempty"`
 	NicType      string            `json:"nic_type,omitempty"`
 	CustomLabels map[string]string `json:"custom_labels,omitempty"`
+	NetworkTags  []string          `json:"network_tags,omitempty"`
 }
 
 func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapInstance, controllerID string) (*RunnerSpec, error) {
@@ -123,6 +135,7 @@ type RunnerSpec struct {
 	NicType         string
 	DiskSize        int64
 	CustomLabels    map[string]string
+	NetworkTags     []string
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
@@ -140,6 +153,9 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	}
 	if len(extraSpecs.CustomLabels) > 0 {
 		maps.Copy(r.CustomLabels, extraSpecs.CustomLabels)
+	}
+	if len(extraSpecs.NetworkTags) > 0 {
+		r.NetworkTags = extraSpecs.NetworkTags
 	}
 }
 

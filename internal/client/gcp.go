@@ -116,6 +116,9 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 			},
 		},
 		Labels: spec.CustomLabels,
+		Tags: &computepb.Tags{
+			Items: spec.NetworkTags,
+		},
 	}
 
 	insertReq := &computepb.InsertInstanceRequest{
