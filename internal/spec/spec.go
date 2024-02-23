@@ -18,6 +18,7 @@ package spec
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/cloudbase/garm-provider-common/cloudconfig"
@@ -25,11 +26,15 @@ import (
 	"github.com/cloudbase/garm-provider-common/params"
 	"github.com/cloudbase/garm-provider-common/util"
 	"github.com/cloudbase/garm-provider-gcp/config"
+	utils "github.com/cloudbase/garm-provider-gcp/internal/util"
 )
 
 const (
 	defaultDiskSizeGB int64  = 127
 	defaultNicType    string = "VIRTIO_NET"
+	garmPoolID        string = "garmpoolid"
+	garmControllerID  string = "garmcontrollerid"
+	osType            string = "ostype"
 )
 
 func newExtraSpecsFromBootstrapData(data params.BootstrapInstance) (*extraSpecs, error) {
@@ -41,14 +46,37 @@ func newExtraSpecsFromBootstrapData(data params.BootstrapInstance) (*extraSpecs,
 		}
 	}
 
+	if err := spec.Validate(); err != nil {
+		return nil, fmt.Errorf("failed to validate extra specs: %w", err)
+	}
+
 	return spec, nil
 }
 
+func (e *extraSpecs) Validate() error {
+	if len(e.CustomLabels) > 61 {
+		return fmt.Errorf("custom labels cannot exceed 64 items")
+	}
+	for k, v := range e.CustomLabels {
+		if len(k) > 63 {
+			return fmt.Errorf("custom label key '%s' exceeds 63 characters", k)
+		}
+		if len(v) > 63 {
+			return fmt.Errorf("custom label value '%s' exceeds 63 characters", v)
+		}
+		if !utils.IsLower(k) || !utils.IsLower(v) {
+			return fmt.Errorf("custom label key '%s' and value '%s' must be lowercase", k, v)
+		}
+	}
+	return nil
+}
+
 type extraSpecs struct {
-	DiskSize     int64  `json:"disksize,omitempty"`
-	NetworkID    string `json:"network_id,omitempty"`
-	SubnetworkID string `json:"subnetwork_id,omitempty"`
-	NicType      string `json:"nic_type,omitempty"`
+	DiskSize     int64             `json:"disksize,omitempty"`
+	NetworkID    string            `json:"network_id,omitempty"`
+	SubnetworkID string            `json:"subnetwork_id,omitempty"`
+	NicType      string            `json:"nic_type,omitempty"`
+	CustomLabels map[string]string `json:"custom_labels,omitempty"`
 }
 
 func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapInstance, controllerID string) (*RunnerSpec, error) {
@@ -62,6 +90,12 @@ func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapI
 		return nil, fmt.Errorf("error loading extra specs: %w", err)
 	}
 
+	labels := map[string]string{
+		garmPoolID:       data.PoolID,
+		garmControllerID: controllerID,
+		osType:           string(data.OSType),
+	}
+
 	spec := &RunnerSpec{
 		Zone:            cfg.Zone,
 		Tools:           tools,
@@ -71,6 +105,7 @@ func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapI
 		ControllerID:    controllerID,
 		NicType:         defaultNicType,
 		DiskSize:        defaultDiskSizeGB,
+		CustomLabels:    labels,
 	}
 
 	spec.MergeExtraSpecs(extraSpecs)
@@ -87,6 +122,7 @@ type RunnerSpec struct {
 	ControllerID    string
 	NicType         string
 	DiskSize        int64
+	CustomLabels    map[string]string
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
@@ -101,6 +137,9 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	}
 	if extraSpecs.NicType != "" {
 		r.NicType = extraSpecs.NicType
+	}
+	if len(extraSpecs.CustomLabels) > 0 {
+		maps.Copy(r.CustomLabels, extraSpecs.CustomLabels)
 	}
 }
 

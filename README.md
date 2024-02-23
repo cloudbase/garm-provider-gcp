@@ -96,6 +96,13 @@ To this end, this provider supports the following extra specs schema:
         "nic_type": {
             "type": "string",
             "description": "The type of NIC attached to the instance. Default is VIRTIO_NET."
+        },
+        "custom_labels":{
+            "type": "object",
+            "description": "Custom labels to be attached to the instance. Each label is a key-value pair where both key and value are strings.",
+            "additionalProprieties": {
+                "type": "string"
+            }
         }
     }
 }
@@ -108,9 +115,12 @@ An example of extra specs json would look like this:
     "disksize": 255,
     "network_id": "projects/garm-testing/global/networks/garm-2",
     "subnet_id": "projects/garm-testing/regions/europe-west1/subnetworks/garm",
-    "nic_type": "VIRTIO_NET"
+    "nic_type": "VIRTIO_NET",
+    "custom_labels": {"environment":"production","project":"myproject"}
 }
 ```
+
+**NOTE**: The `custom_labels` must meet the [GCP requirements for labels](https://cloud.google.com/compute/docs/labeling-resources#requirements)!
 
 To set it on an existing pool, simply run:
 
