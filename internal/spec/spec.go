@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"regexp"
 	"strings"
 
 	"github.com/cloudbase/garm-provider-common/cloudconfig"
@@ -26,15 +27,17 @@ import (
 	"github.com/cloudbase/garm-provider-common/params"
 	"github.com/cloudbase/garm-provider-common/util"
 	"github.com/cloudbase/garm-provider-gcp/config"
-	utils "github.com/cloudbase/garm-provider-gcp/internal/util"
 )
 
 const (
-	defaultDiskSizeGB int64  = 127
-	defaultNicType    string = "VIRTIO_NET"
-	garmPoolID        string = "garmpoolid"
-	garmControllerID  string = "garmcontrollerid"
-	osType            string = "ostype"
+	defaultDiskSizeGB     int64  = 127
+	defaultNicType        string = "VIRTIO_NET"
+	garmPoolID            string = "garmpoolid"
+	garmControllerID      string = "garmcontrollerid"
+	osType                string = "ostype"
+	customLabelKeyRegex   string = "^\\p{Ll}[\\p{Ll}0-9_-]{0,62}$"
+	customLabelValueRegex string = "^[\\p{Ll}0-9_-]{0,63}$"
+	networkTagRegex       string = "^[a-z][a-z0-9-]{0,61}[a-z0-9]$"
 )
 
 func newExtraSpecsFromBootstrapData(data params.BootstrapInstance) (*extraSpecs, error) {
@@ -55,28 +58,35 @@ func newExtraSpecsFromBootstrapData(data params.BootstrapInstance) (*extraSpecs,
 
 func (e *extraSpecs) Validate() error {
 	if len(e.CustomLabels) > 61 {
-		return fmt.Errorf("custom labels cannot exceed 64 items")
+		return fmt.Errorf("custom labels cannot exceed 61 items")
 	}
-	for k, v := range e.CustomLabels {
-		if len(k) > 63 {
-			return fmt.Errorf("custom label key '%s' exceeds 63 characters", k)
+	keyRegex, err := regexp.Compile(customLabelKeyRegex)
+	if err != nil {
+		return fmt.Errorf("invalid key regex pattern: %w", err)
+
+	}
+	valueRegex, err := regexp.Compile(customLabelValueRegex)
+	if err != nil {
+		return fmt.Errorf("invalid value regex pattern: %w", err)
+	}
+	for key, value := range e.CustomLabels {
+		if !keyRegex.MatchString(key) {
+			return fmt.Errorf("custom label key '%s' does not match requirements", key)
 		}
-		if len(v) > 63 {
-			return fmt.Errorf("custom label value '%s' exceeds 63 characters", v)
-		}
-		if !utils.IsLower(k) || !utils.IsLower(v) {
-			return fmt.Errorf("custom label key '%s' and value '%s' must be lowercase", k, v)
+		if !valueRegex.MatchString(value) {
+			return fmt.Errorf("custom label value '%s' does not match requirements", value)
 		}
 	}
 	if len(e.NetworkTags) > 64 {
 		return fmt.Errorf("network tags cannot exceed 64 items")
 	}
+	tagRegex, err := regexp.Compile(networkTagRegex)
+	if err != nil {
+		return fmt.Errorf("invalid tag regex pattern: %w", err)
+	}
 	for _, tag := range e.NetworkTags {
-		if len(tag) > 63 {
-			return fmt.Errorf("network tag '%s' exceeds 63 characters", tag)
-		}
-		if !utils.IsLower(tag) {
-			return fmt.Errorf("network tag '%s' must be lowercase", tag)
+		if !tagRegex.MatchString(tag) {
+			return fmt.Errorf("network tag '%s' does not match requirements", tag)
 		}
 	}
 	return nil

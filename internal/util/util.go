@@ -18,7 +18,6 @@ package util
 import (
 	"fmt"
 	"strings"
-	"unicode"
 
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/cloudbase/garm-provider-common/params"
@@ -55,13 +54,4 @@ func GcpInstanceToParamsInstance(gcpInstance *computepb.Instance) (params.Provid
 	}
 
 	return details, nil
-}
-
-func IsLower(s string) bool {
-	for _, r := range s {
-		if !unicode.IsLower(r) && unicode.IsLetter(r) {
-			return false
-		}
-	}
-	return true
 }
