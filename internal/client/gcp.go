@@ -36,9 +36,6 @@ const (
 	linuxStartupScript   string = "startup-script"
 	windowsStartupScript string = "sysprep-specialize-script-ps1"
 	accessConfigType     string = "ONE_TO_ONE_NAT"
-	garmPoolID           string = "garmpoolid"
-	garmControllerID     string = "garmcontrollerid"
-	osType               string = "ostype"
 )
 
 func NewGcpCli(ctx context.Context, cfg *config.Config) (*GcpCli, error) {
@@ -87,16 +84,7 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 	inst := &computepb.Instance{
 		Name:        proto.String(name),
 		MachineType: proto.String(util.GetMachineType(g.cfg.Zone, spec.BootstrapParams.Flavor)),
-		Disks: []*computepb.AttachedDisk{
-			{
-				Boot: proto.Bool(true),
-				InitializeParams: &computepb.AttachedDiskInitializeParams{
-					DiskSizeGb:  proto.Int64(spec.DiskSize),
-					SourceImage: proto.String(spec.BootstrapParams.Image),
-				},
-				AutoDelete: proto.Bool(true),
-			},
-		},
+		Disks:       generateBootDisk(spec.DiskSize, spec.BootstrapParams.Image, spec.SourceSnapshot),
 		NetworkInterfaces: []*computepb.NetworkInterface{
 			{
 				Network: proto.String(g.cfg.NetworkID),
@@ -118,10 +106,9 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 				},
 			},
 		},
-		Labels: map[string]string{
-			garmPoolID:       spec.BootstrapParams.PoolID,
-			garmControllerID: spec.ControllerID,
-			osType:           string(spec.BootstrapParams.OSType),
+		Labels: spec.CustomLabels,
+		Tags: &computepb.Tags{
+			Items: spec.NetworkTags,
 		},
 	}
 
@@ -245,4 +232,24 @@ func selectStartupScript(osType params.OSType) string {
 	default:
 		return ""
 	}
+}
+
+func generateBootDisk(diskSize int64, image, snapshot string) []*computepb.AttachedDisk {
+	disk := []*computepb.AttachedDisk{
+		{
+			Boot: proto.Bool(true),
+			InitializeParams: &computepb.AttachedDiskInitializeParams{
+				DiskSizeGb:     proto.Int64(diskSize),
+				SourceImage:    proto.String(image),
+				SourceSnapshot: proto.String(snapshot),
+			},
+			AutoDelete: proto.Bool(true),
+		},
+	}
+
+	if snapshot != "" {
+		disk[0].InitializeParams.SourceImage = nil
+	}
+
+	return disk
 }

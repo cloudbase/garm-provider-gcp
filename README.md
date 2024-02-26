@@ -96,6 +96,24 @@ To this end, this provider supports the following extra specs schema:
         "nic_type": {
             "type": "string",
             "description": "The type of NIC attached to the instance. Default is VIRTIO_NET."
+        },
+        "custom_labels":{
+            "type": "object",
+            "description": "Custom labels to be attached to the instance. Each label is a key-value pair where both key and value are strings.",
+            "additionalProperties": {
+                "type": "string"
+            }
+        },
+        "network_tags": {
+            "type": "array",
+            "description": "A list of network tags to be attached to the instance.",
+            "items": {
+                "type": "string"
+            }
+        },
+        "source_snapshot": {
+            "type": "string",
+            "description": "The source snapshot to create this disk."
         }
     }
 }
@@ -108,9 +126,14 @@ An example of extra specs json would look like this:
     "disksize": 255,
     "network_id": "projects/garm-testing/global/networks/garm-2",
     "subnet_id": "projects/garm-testing/regions/europe-west1/subnetworks/garm",
-    "nic_type": "VIRTIO_NET"
+    "nic_type": "VIRTIO_NET",
+    "custom_labels": {"environment":"production","project":"myproject"},
+    "network_tags": ["web-server", "production"],
+    "source_snapshot": "projects/garm-testing/global/snapshots/garm-snapshot"
 }
 ```
+
+**NOTE**: The `custom_labels` and `network_tags` must meet the [GCP requirements for labels](https://cloud.google.com/compute/docs/labeling-resources#requirements) and the [GCP requirements for network tags](https://cloud.google.com/vpc/docs/add-remove-network-tags#restrictions)!
 
 To set it on an existing pool, simply run:
 

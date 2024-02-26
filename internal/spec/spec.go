@@ -18,6 +18,8 @@ package spec
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"regexp"
 	"strings"
 
 	"github.com/cloudbase/garm-provider-common/cloudconfig"
@@ -28,8 +30,14 @@ import (
 )
 
 const (
-	defaultDiskSizeGB int64  = 127
-	defaultNicType    string = "VIRTIO_NET"
+	defaultDiskSizeGB     int64  = 127
+	defaultNicType        string = "VIRTIO_NET"
+	garmPoolID            string = "garmpoolid"
+	garmControllerID      string = "garmcontrollerid"
+	osType                string = "ostype"
+	customLabelKeyRegex   string = "^\\p{Ll}[\\p{Ll}0-9_-]{0,62}$"
+	customLabelValueRegex string = "^[\\p{Ll}0-9_-]{0,63}$"
+	networkTagRegex       string = "^[a-z][a-z0-9-]{0,61}[a-z0-9]$"
 )
 
 func newExtraSpecsFromBootstrapData(data params.BootstrapInstance) (*extraSpecs, error) {
@@ -41,14 +49,57 @@ func newExtraSpecsFromBootstrapData(data params.BootstrapInstance) (*extraSpecs,
 		}
 	}
 
+	if err := spec.Validate(); err != nil {
+		return nil, fmt.Errorf("failed to validate extra specs: %w", err)
+	}
+
 	return spec, nil
 }
 
+func (e *extraSpecs) Validate() error {
+	if len(e.CustomLabels) > 61 {
+		return fmt.Errorf("custom labels cannot exceed 61 items")
+	}
+	keyRegex, err := regexp.Compile(customLabelKeyRegex)
+	if err != nil {
+		return fmt.Errorf("invalid key regex pattern: %w", err)
+
+	}
+	valueRegex, err := regexp.Compile(customLabelValueRegex)
+	if err != nil {
+		return fmt.Errorf("invalid value regex pattern: %w", err)
+	}
+	for key, value := range e.CustomLabels {
+		if !keyRegex.MatchString(key) {
+			return fmt.Errorf("custom label key '%s' does not match requirements", key)
+		}
+		if !valueRegex.MatchString(value) {
+			return fmt.Errorf("custom label value '%s' does not match requirements", value)
+		}
+	}
+	if len(e.NetworkTags) > 64 {
+		return fmt.Errorf("network tags cannot exceed 64 items")
+	}
+	tagRegex, err := regexp.Compile(networkTagRegex)
+	if err != nil {
+		return fmt.Errorf("invalid tag regex pattern: %w", err)
+	}
+	for _, tag := range e.NetworkTags {
+		if !tagRegex.MatchString(tag) {
+			return fmt.Errorf("network tag '%s' does not match requirements", tag)
+		}
+	}
+	return nil
+}
+
 type extraSpecs struct {
-	DiskSize     int64  `json:"disksize,omitempty"`
-	NetworkID    string `json:"network_id,omitempty"`
-	SubnetworkID string `json:"subnetwork_id,omitempty"`
-	NicType      string `json:"nic_type,omitempty"`
+	DiskSize       int64             `json:"disksize,omitempty"`
+	NetworkID      string            `json:"network_id,omitempty"`
+	SubnetworkID   string            `json:"subnetwork_id,omitempty"`
+	NicType        string            `json:"nic_type,omitempty"`
+	CustomLabels   map[string]string `json:"custom_labels,omitempty"`
+	NetworkTags    []string          `json:"network_tags,omitempty"`
+	SourceSnapshot string            `json:"source_snapshot,omitempty"`
 }
 
 func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapInstance, controllerID string) (*RunnerSpec, error) {
@@ -62,6 +113,12 @@ func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapI
 		return nil, fmt.Errorf("error loading extra specs: %w", err)
 	}
 
+	labels := map[string]string{
+		garmPoolID:       data.PoolID,
+		garmControllerID: controllerID,
+		osType:           string(data.OSType),
+	}
+
 	spec := &RunnerSpec{
 		Zone:            cfg.Zone,
 		Tools:           tools,
@@ -71,6 +128,7 @@ func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapI
 		ControllerID:    controllerID,
 		NicType:         defaultNicType,
 		DiskSize:        defaultDiskSizeGB,
+		CustomLabels:    labels,
 	}
 
 	spec.MergeExtraSpecs(extraSpecs)
@@ -87,6 +145,9 @@ type RunnerSpec struct {
 	ControllerID    string
 	NicType         string
 	DiskSize        int64
+	CustomLabels    map[string]string
+	NetworkTags     []string
+	SourceSnapshot  string
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
@@ -101,6 +162,15 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	}
 	if extraSpecs.NicType != "" {
 		r.NicType = extraSpecs.NicType
+	}
+	if len(extraSpecs.CustomLabels) > 0 {
+		maps.Copy(r.CustomLabels, extraSpecs.CustomLabels)
+	}
+	if len(extraSpecs.NetworkTags) > 0 {
+		r.NetworkTags = extraSpecs.NetworkTags
+	}
+	if extraSpecs.SourceSnapshot != "" {
+		r.SourceSnapshot = extraSpecs.SourceSnapshot
 	}
 }
 
