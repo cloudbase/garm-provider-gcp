@@ -26,6 +26,7 @@ import (
 	"github.com/cloudbase/garm-provider-gcp/config"
 	"github.com/cloudbase/garm-provider-gcp/internal/spec"
 	"github.com/cloudbase/garm-provider-gcp/internal/util"
+	"github.com/googleapis/gax-go/v2/apierror"
 	"golang.org/x/oauth2/google"
 	gcompute "google.golang.org/api/compute/v1"
 	"google.golang.org/api/option"
@@ -134,7 +135,7 @@ func (g *GcpCli) GetInstance(ctx context.Context, instanceName string) (*compute
 	req := &computepb.GetInstanceRequest{
 		Project:  g.cfg.ProjectId,
 		Zone:     g.cfg.Zone,
-		Instance: instanceName,
+		Instance: util.GetInstanceName(instanceName),
 	}
 
 	instance, err := g.client.Get(ctx, req)
@@ -174,6 +175,11 @@ func (g *GcpCli) DeleteInstance(ctx context.Context, instance string) error {
 	}
 
 	op, err := g.client.Delete(ctx, req)
+
+	if err.(*apierror.APIError).HTTPCode() == 404 {
+		return nil
+	}
+
 	if err != nil {
 		return fmt.Errorf("unable to delete instance: %w", err)
 	}
