@@ -28,7 +28,8 @@ project_id = "garm-testing"
 zone = "europe-west1-d"
 network_id = "projects/garm-testing/global/networks/garm"
 subnetwork_id = "projects/garm-testing/regions/europe-west1/subnetworks/garm"
-CredentialsFile = "/home/ubuntu/service-account-key.json"
+credentials_file = "/home/ubuntu/service-account-key.json"
+external_ip_access = true
 ```
 
 ## Creating a pool

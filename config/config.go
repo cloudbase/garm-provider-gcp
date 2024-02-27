@@ -34,11 +34,12 @@ func NewConfig(cfgFile string) (*Config, error) {
 }
 
 type Config struct {
-	ProjectId       string `toml:"project_id"`
-	Zone            string `toml:"zone"`
-	CredentialsFile string `toml:"credentials_file"`
-	NetworkID       string `toml:"network_id"`
-	SubnetworkID    string `toml:"subnetwork_id"`
+	ProjectId        string `toml:"project_id"`
+	Zone             string `toml:"zone"`
+	CredentialsFile  string `toml:"credentials_file"`
+	NetworkID        string `toml:"network_id"`
+	SubnetworkID     string `toml:"subnetwork_id"`
+	ExternalIPAccess bool   `toml:"external_ip_access"`
 }
 
 func (c *Config) Validate() error {
