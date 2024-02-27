@@ -113,6 +113,10 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 		},
 	}
 
+	if !g.cfg.ExternalIPAccess {
+		inst.NetworkInterfaces[0].AccessConfigs = nil
+	}
+
 	insertReq := &computepb.InsertInstanceRequest{
 		Project:          g.cfg.ProjectId,
 		Zone:             g.cfg.Zone,
