@@ -16,6 +16,7 @@
 package spec
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -202,22 +203,23 @@ func (r RunnerSpec) ComposeUserData() (string, error) {
 			return "", fmt.Errorf("failed to generate userdata: %w", err)
 		}
 
-		lines := strings.Split(string(udata), "\n")
-		if len(lines) > 0 && strings.HasPrefix(lines[0], "#!") {
-			additionalCommands := []string{
-				// Create user 'runner' if it doesn't exist; '|| true' to ignore if user already exists
-				"sudo useradd -m " + defaults.DefaultUser + " || true",
-				// Create the runner home directory if it doesn't exist
-				"sudo mkdir -p /home/" + defaults.DefaultUser,
-				// Add user to sudoers
-				"sudo usermod -aG sudo " + defaults.DefaultUser,
-				// Check curl and tar are installed
-				"sudo apt-get update && sudo apt-get install -y curl tar",
-			}
-			lines = append(lines[:1], append(additionalCommands, lines[1:]...)...)
+		asBase64 := base64.StdEncoding.EncodeToString(udata)
+		scriptCommands := []string{
+			"sudo useradd -m " + defaults.DefaultUser + " || true",
+			// Create the runner home directory if it doesn't exist
+			"sudo mkdir -p /home/" + defaults.DefaultUser,
+			// Add user to sudoers
+			"sudo usermod -aG sudo " + defaults.DefaultUser,
+			// Check curl and tar are installed
+			"sudo apt-get update && sudo apt-get install -y curl tar",
+			// Install the runner
+			"echo " + asBase64 + " | base64 -d > /install_runner.sh",
+			"chmod +x /install_runner.sh",
+			"echo 'runner  ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/garm",
+			"su -l -c /install_runner.sh " + defaults.DefaultUser,
 		}
-		modifiedUdata := strings.Join(lines, "\n")
-		return modifiedUdata, nil
+		script := strings.Join(scriptCommands, "\n")
+		return script, nil
 	case params.Windows:
 		udata, err := cloudconfig.GetRunnerInstallScript(r.BootstrapParams, r.Tools, r.BootstrapParams.Name)
 		if err != nil {
