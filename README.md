@@ -116,7 +116,8 @@ To this end, this provider supports the following extra specs schema:
             "type": "string",
             "description": "The source snapshot to create this disk."
         }
-    }
+    },
+	"additionalProperties": false
 }
 ```
 

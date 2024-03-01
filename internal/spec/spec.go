@@ -28,6 +28,7 @@ import (
 	"github.com/cloudbase/garm-provider-common/params"
 	"github.com/cloudbase/garm-provider-common/util"
 	"github.com/cloudbase/garm-provider-gcp/config"
+	"github.com/xeipuuv/gojsonschema"
 )
 
 const (
@@ -39,10 +40,71 @@ const (
 	customLabelKeyRegex   string = "^\\p{Ll}[\\p{Ll}0-9_-]{0,62}$"
 	customLabelValueRegex string = "^[\\p{Ll}0-9_-]{0,63}$"
 	networkTagRegex       string = "^[a-z][a-z0-9-]{0,61}[a-z0-9]$"
+	jsonSchema            string = `
+		{
+			"$schema": "http://cloudbase.it/garm-provider-gcp/schemas/extra_specs#",
+			"type": "object",
+			"description": "Schema defining supported extra specs for the Garm GCP Provider",
+			"properties": {
+				"disksize": {
+					"type": "integer",
+					"description": "The size of the root disk in GB. Default is 127 GB."
+				},
+				"network_id": {
+					"type": "string",
+					"description": "The name of the network attached to the instance."
+				},
+				"subnet_id": {
+					"type": "string",
+					"description": "The name of the subnetwork attached to the instance."
+				},
+				"nic_type": {
+					"type": "string",
+					"description": "The type of NIC attached to the instance. Default is VIRTIO_NET."
+				},
+				"custom_labels":{
+					"type": "object",
+					"description": "Custom labels to be attached to the instance. Each label is a key-value pair where both key and value are strings.",
+					"additionalProperties": {
+						"type": "string"
+					}
+				},
+				"network_tags": {
+					"type": "array",
+					"description": "A list of network tags to be attached to the instance.",
+					"items": {
+						"type": "string"
+					}
+				},
+				"source_snapshot": {
+					"type": "string",
+					"description": "The source snapshot to create this disk."
+				}
+			},
+			"additionalProperties": false
+		}
+	`
 )
+
+func jsonSchemaValidation(schema json.RawMessage) error {
+	schemaLoader := gojsonschema.NewStringLoader(jsonSchema)
+	extraSpecsLoader := gojsonschema.NewBytesLoader(schema)
+	result, err := gojsonschema.Validate(schemaLoader, extraSpecsLoader)
+	if err != nil {
+		return fmt.Errorf("failed to validate schema: %w", err)
+	}
+	if !result.Valid() {
+		return fmt.Errorf("schema validation failed: %s", result.Errors())
+	}
+	return nil
+}
 
 func newExtraSpecsFromBootstrapData(data params.BootstrapInstance) (*extraSpecs, error) {
 	spec := &extraSpecs{}
+
+	if err := jsonSchemaValidation(data.ExtraSpecs); err != nil {
+		return nil, fmt.Errorf("failed to validate extra specs: %w", err)
+	}
 
 	if len(data.ExtraSpecs) > 0 {
 		if err := json.Unmarshal(data.ExtraSpecs, spec); err != nil {
