@@ -41,20 +41,18 @@ func NewGcpProvider(ctx context.Context, cfgFile string, controllerID string) (*
 	}
 
 	return &GcpProvider{
-		cfg:          conf,
 		gcpCli:       gcpCli,
 		controllerID: controllerID,
 	}, nil
 }
 
 type GcpProvider struct {
-	cfg          *config.Config
 	gcpCli       *client.GcpCli
 	controllerID string
 }
 
 func (g *GcpProvider) CreateInstance(ctx context.Context, bootstrapParams params.BootstrapInstance) (params.ProviderInstance, error) {
-	spec, err := spec.GetRunnerSpecFromBootstrapParams(g.cfg, bootstrapParams, g.controllerID)
+	spec, err := spec.GetRunnerSpecFromBootstrapParams(g.gcpCli.Config(), bootstrapParams, g.controllerID)
 	if err != nil {
 		return params.ProviderInstance{}, fmt.Errorf("failed to get runner spec: %w", err)
 	}
