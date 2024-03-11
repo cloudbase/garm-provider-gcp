@@ -26,6 +26,7 @@ import (
 	"github.com/cloudbase/garm-provider-gcp/config"
 	"github.com/cloudbase/garm-provider-gcp/internal/spec"
 	"github.com/cloudbase/garm-provider-gcp/internal/util"
+	"github.com/googleapis/gax-go/v2"
 	"github.com/googleapis/gax-go/v2/apierror"
 	"golang.org/x/oauth2/google"
 	gcompute "google.golang.org/api/compute/v1"
@@ -37,6 +38,11 @@ const (
 	linuxStartupScript   string = "startup-script"
 	windowsStartupScript string = "sysprep-specialize-script-ps1"
 	accessConfigType     string = "ONE_TO_ONE_NAT"
+)
+
+var (
+	WaitOp = (*compute.Operation).Wait
+	NextIt = (*compute.InstanceIterator).Next
 )
 
 func NewGcpCli(ctx context.Context, cfg *config.Config) (*GcpCli, error) {
@@ -64,10 +70,34 @@ func NewGcpCli(ctx context.Context, cfg *config.Config) (*GcpCli, error) {
 	return gcpCli, nil
 }
 
-type GcpCli struct {
-	cfg *config.Config
+type ClientInterface interface {
+	Insert(ctx context.Context, req *computepb.InsertInstanceRequest, opts ...gax.CallOption) (*compute.Operation, error)
+	Start(ctx context.Context, req *computepb.StartInstanceRequest, opts ...gax.CallOption) (*compute.Operation, error)
+	Stop(ctx context.Context, req *computepb.StopInstanceRequest, opts ...gax.CallOption) (*compute.Operation, error)
+	Delete(ctx context.Context, req *computepb.DeleteInstanceRequest, opts ...gax.CallOption) (*compute.Operation, error)
+	List(ctx context.Context, req *computepb.ListInstancesRequest, opts ...gax.CallOption) *compute.InstanceIterator
+	Get(ctx context.Context, req *computepb.GetInstanceRequest, opts ...gax.CallOption) (*computepb.Instance, error)
+}
 
-	client *compute.InstancesClient
+type GcpCli struct {
+	cfg    *config.Config
+	client ClientInterface
+}
+
+func (g GcpCli) Config() *config.Config {
+	return g.cfg
+}
+
+func (g GcpCli) Client() ClientInterface {
+	return g.client
+}
+
+func (g *GcpCli) SetClient(client ClientInterface) {
+	g.client = client
+}
+
+func (g *GcpCli) SetConfig(cfg *config.Config) {
+	g.cfg = cfg
 }
 
 func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*computepb.Instance, error) {
@@ -128,7 +158,7 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 		return nil, fmt.Errorf("failed to create instance %s: %w", insertReq, err)
 	}
 
-	if err = op.Wait(ctx); err != nil {
+	if err = WaitOp(op, ctx); err != nil {
 		return nil, fmt.Errorf("failed to wait for operation: %w", err)
 	}
 
@@ -161,7 +191,7 @@ func (g *GcpCli) ListDescribedInstances(ctx context.Context, poolID string) ([]*
 	it := g.client.List(ctx, req)
 	var instances []*computepb.Instance
 	for {
-		instance, _ := it.Next()
+		instance, _ := NextIt(it)
 		if instance == nil {
 			break
 		}
@@ -184,7 +214,7 @@ func (g *GcpCli) DeleteInstance(ctx context.Context, instance string) error {
 		return fmt.Errorf("unable to delete instance: %w", err)
 	}
 
-	if err = op.Wait(ctx); err != nil {
+	if err = WaitOp(op, ctx); err != nil {
 		return fmt.Errorf("unable to wait for the delete operation: %w", err)
 	}
 
@@ -203,7 +233,7 @@ func (g *GcpCli) StopInstance(ctx context.Context, instance string) error {
 		return fmt.Errorf("unable to stop instance: %w", err)
 	}
 
-	if err = op.Wait(ctx); err != nil {
+	if err = WaitOp(op, ctx); err != nil {
 		return fmt.Errorf("unable to wait for the operation: %w", err)
 	}
 
@@ -222,7 +252,7 @@ func (g *GcpCli) StartInstance(ctx context.Context, instance string) error {
 		return fmt.Errorf("unable to start instance: %w", err)
 	}
 
-	if err = op.Wait(ctx); err != nil {
+	if err = WaitOp(op, ctx); err != nil {
 		return fmt.Errorf("unable to wait for the operation: %w", err)
 	}
 
