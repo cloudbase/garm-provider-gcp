@@ -115,6 +115,21 @@ To this end, this provider supports the following extra specs schema:
         "source_snapshot": {
             "type": "string",
             "description": "The source snapshot to create this disk."
+        },
+        "enable_boot_debug": {
+            "type": "boolean",
+            "description": "Enable boot debug on the VM."
+        },
+        "runner_install_template": {
+            "type": "string",
+            "description": "This option can be used to override the default runner install template. If used, the caller is responsible for the correctness of the template as well as the suitability of the template for the target OS. Use the extra_context extra spec if your template has variables in it that need to be expanded."
+        },
+        "extra_context": {
+            "type": "object",
+            "description": "Extra context that will be passed to the runner_install_template.",
+            "additionalProperties": {
+                "type": "string"
+            }
         }
     },
 	"additionalProperties": false
