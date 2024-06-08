@@ -79,6 +79,21 @@ const (
 				"source_snapshot": {
 					"type": "string",
 					"description": "The source snapshot to create this disk."
+				},
+				"enable_boot_debug": {
+					"type": "boolean",
+					"description": "Enable boot debug on the VM."
+				},
+				"runner_install_template": {
+					"type": "string",
+					"description": "This option can be used to override the default runner install template. If used, the caller is responsible for the correctness of the template as well as the suitability of the template for the target OS. Use the extra_context extra spec if your template has variables in it that need to be expanded."
+				},
+				"extra_context": {
+					"type": "object",
+					"description": "Extra context that will be passed to the runner_install_template.",
+					"additionalProperties": {
+						"type": "string"
+					}
 				}
 			},
 			"additionalProperties": false
@@ -160,13 +175,14 @@ func (e *extraSpecs) Validate() error {
 }
 
 type extraSpecs struct {
-	DiskSize       int64             `json:"disksize,omitempty"`
-	NetworkID      string            `json:"network_id,omitempty"`
-	SubnetworkID   string            `json:"subnetwork_id,omitempty"`
-	NicType        string            `json:"nic_type,omitempty"`
-	CustomLabels   map[string]string `json:"custom_labels,omitempty"`
-	NetworkTags    []string          `json:"network_tags,omitempty"`
-	SourceSnapshot string            `json:"source_snapshot,omitempty"`
+	DiskSize        int64             `json:"disksize,omitempty"`
+	NetworkID       string            `json:"network_id,omitempty"`
+	SubnetworkID    string            `json:"subnetwork_id,omitempty"`
+	NicType         string            `json:"nic_type,omitempty"`
+	CustomLabels    map[string]string `json:"custom_labels,omitempty"`
+	NetworkTags     []string          `json:"network_tags,omitempty"`
+	SourceSnapshot  string            `json:"source_snapshot,omitempty"`
+	EnableBootDebug *bool             `json:"enable_boot_debug"`
 }
 
 func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapInstance, controllerID string) (*RunnerSpec, error) {
@@ -215,6 +231,7 @@ type RunnerSpec struct {
 	CustomLabels    map[string]string
 	NetworkTags     []string
 	SourceSnapshot  string
+	EnableBootDebug bool
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
@@ -239,6 +256,9 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	if extraSpecs.SourceSnapshot != "" {
 		r.SourceSnapshot = extraSpecs.SourceSnapshot
 	}
+	if extraSpecs.EnableBootDebug != nil {
+		r.EnableBootDebug = *extraSpecs.EnableBootDebug
+	}
 }
 
 func (r *RunnerSpec) Validate() error {
@@ -257,11 +277,13 @@ func (r *RunnerSpec) Validate() error {
 	if r.NicType == "" {
 		return fmt.Errorf("missing nic type")
 	}
-
 	return nil
 }
 
 func (r RunnerSpec) ComposeUserData() (string, error) {
+	bootstrapParams := r.BootstrapParams
+	bootstrapParams.UserDataOptions.EnableBootDebug = r.EnableBootDebug
+
 	switch r.BootstrapParams.OSType {
 	case params.Linux:
 		udata, err := cloudconfig.GetRunnerInstallScript(r.BootstrapParams, r.Tools, r.BootstrapParams.Name)
@@ -287,7 +309,7 @@ func (r RunnerSpec) ComposeUserData() (string, error) {
 		script := strings.Join(scriptCommands, "\n")
 		return script, nil
 	case params.Windows:
-		udata, err := cloudconfig.GetRunnerInstallScript(r.BootstrapParams, r.Tools, r.BootstrapParams.Name)
+		udata, err := cloudconfig.GetRunnerInstallScript(bootstrapParams, r.Tools, bootstrapParams.Name)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate userdata: %w", err)
 		}
