@@ -33,13 +33,42 @@ func GetInstanceName(name string) string {
 	return lowerName
 }
 
+func getNameForInstance(instance *computepb.Instance) (string, error) {
+	if instance == nil {
+		return "", fmt.Errorf("instance is nil")
+	}
+
+	var name string
+	if instance.Name != nil {
+		name = *instance.Name
+	}
+	if instance.Metadata != nil {
+		for _, item := range instance.Metadata.Items {
+			if item.Key != nil && *item.Key == "runner_name" {
+				if item.Value != nil {
+					return *item.Value, nil
+				}
+			}
+		}
+	}
+	return name, nil
+}
+
 func GcpInstanceToParamsInstance(gcpInstance *computepb.Instance) (params.ProviderInstance, error) {
 	if gcpInstance == nil {
 		return params.ProviderInstance{}, fmt.Errorf("instance ID is nil")
 	}
+	name, err := getNameForInstance(gcpInstance)
+	if err != nil {
+		return params.ProviderInstance{}, fmt.Errorf("failed to get instance name: %w", err)
+	}
+	if gcpInstance.Name == nil {
+		return params.ProviderInstance{}, fmt.Errorf("instance name is nil")
+	}
+
 	details := params.ProviderInstance{
 		ProviderID: GetInstanceName(*gcpInstance.Name),
-		Name:       GetInstanceName(*gcpInstance.Name),
+		Name:       name,
 		OSType:     params.OSType(gcpInstance.Labels["ostype"]),
 		OSArch:     params.OSArch(*gcpInstance.Disks[0].Architecture),
 	}
