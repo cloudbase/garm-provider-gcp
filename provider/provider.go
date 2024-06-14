@@ -58,7 +58,7 @@ func (g *GcpProvider) CreateInstance(ctx context.Context, bootstrapParams params
 	}
 	inst, err := g.gcpCli.CreateInstance(ctx, spec)
 	if err != nil {
-		return g.GetInstance(ctx, bootstrapParams.Name)
+		return params.ProviderInstance{}, fmt.Errorf("error creating instance: %w", err)
 	}
 	instance := params.ProviderInstance{
 		ProviderID: *inst.Name,
