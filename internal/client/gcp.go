@@ -155,6 +155,10 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 					Key:   proto.String(selectStartupScript(spec.BootstrapParams.OSType)),
 					Value: proto.String(udata),
 				},
+				{
+					Key:   proto.String("runner_name"),
+					Value: proto.String(spec.BootstrapParams.Name),
+				},
 			},
 		},
 		Labels: spec.CustomLabels,
