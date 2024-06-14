@@ -55,9 +55,5 @@ func (c *Config) Validate() error {
 	if c.SubnetworkID == "" {
 		return fmt.Errorf("missing subnetwork_id")
 	}
-	if c.CredentialsFile == "" {
-		return fmt.Errorf("missing credentials_file")
-	}
-
 	return nil
 }
