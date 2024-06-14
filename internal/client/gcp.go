@@ -230,7 +230,12 @@ func (g *GcpCli) DeleteInstance(ctx context.Context, instance string) error {
 
 	op, err := g.client.Delete(ctx, req)
 
-	if err != nil && err.(*apierror.APIError).HTTPCode() != 404 {
+	if err != nil {
+		asApiErr, ok := err.(*apierror.APIError)
+		if ok && asApiErr.HTTPCode() == 404 {
+			// We got a 404 error. The instance is gone.
+			return nil
+		}
 		return fmt.Errorf("unable to delete instance: %w", err)
 	}
 
