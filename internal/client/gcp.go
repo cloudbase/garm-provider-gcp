@@ -45,8 +45,8 @@ var (
 	NextIt = (*compute.InstanceIterator).Next
 )
 
-func NewGcpCli(ctx context.Context, cfg *config.Config) (*GcpCli, error) {
-	jsonKey, err := os.ReadFile(cfg.CredentialsFile)
+func getHTTPClientOptionFromCredentialsFile(ctx context.Context, credentialsFile string) (option.ClientOption, error) {
+	jsonKey, err := os.ReadFile(credentialsFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read JSON key file: %w", err)
 	}
@@ -57,8 +57,28 @@ func NewGcpCli(ctx context.Context, cfg *config.Config) (*GcpCli, error) {
 	// Create an HTTP client using the JWT Config
 	client := config.Client(ctx)
 
+	return option.WithHTTPClient(client), nil
+}
+
+func NewGcpCli(ctx context.Context, cfg *config.Config) (*GcpCli, error) {
+	var authOptions []option.ClientOption
+
+	if cfg.CredentialsFile != "" {
+		clientOption, err := getHTTPClientOptionFromCredentialsFile(ctx, cfg.CredentialsFile)
+		if err != nil {
+			// Explicit credentials were set, but failed to create the client.
+			return nil, fmt.Errorf("failed to get http client option: %w", err)
+		}
+		authOptions = append(authOptions, clientOption)
+	}
+	creds, err := google.FindDefaultCredentials(ctx, gcompute.CloudPlatformScope)
+	if err != nil && len(authOptions) == 0 {
+		return nil, fmt.Errorf("failed to find default credentials and no credentials file supplied: %w", err)
+	}
+	authOptions = append(authOptions, option.WithCredentials(creds))
+
 	// Now use this client to create a Compute Engine client
-	computeClient, err := compute.NewInstancesRESTClient(ctx, option.WithHTTPClient(client))
+	computeClient, err := compute.NewInstancesRESTClient(ctx, authOptions...)
 	if err != nil {
 		return nil, fmt.Errorf("error creating compute service: %w", err)
 	}

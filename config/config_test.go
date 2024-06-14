@@ -84,17 +84,6 @@ func TestConfig_Validate(t *testing.T) {
 			},
 			errString: fmt.Errorf("missing subnetwork_id"),
 		},
-		{
-			name: "MissingCredentialsFile",
-			config: &Config{
-				Zone:             "europe-west1-d",
-				ProjectId:        "my-project",
-				NetworkID:        "my-network",
-				SubnetworkID:     "my-subnetwork",
-				ExternalIPAccess: true,
-			},
-			errString: fmt.Errorf("missing credentials_file"),
-		},
 	}
 
 	for _, tc := range tests {
