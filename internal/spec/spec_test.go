@@ -41,7 +41,12 @@ func TestJsonSchemaValidation(t *testing.T) {
 					"example_label": "example_value"
 				},
 				"network_tags": ["example_tag"],
-				"source_snapshot": "snapshot-id"
+				"source_snapshot": "snapshot-id",
+				"enable_boot_debug": true,
+				"runner_install_template": "install-template",
+				"extra_context": {
+					"key": "value"
+				}
 			}`),
 			errString: "",
 		},
@@ -79,6 +84,7 @@ func TestJsonSchemaValidation(t *testing.T) {
 }
 
 func TestMergeExtraSpecs(t *testing.T) {
+	enable_boot_debug := true
 	tests := []struct {
 		name       string
 		extraSpecs *extraSpecs
@@ -86,13 +92,14 @@ func TestMergeExtraSpecs(t *testing.T) {
 		{
 			name: "ValidExtraSpecs",
 			extraSpecs: &extraSpecs{
-				NetworkID:      "projects/garm-testing/global/networks/garm-2",
-				SubnetworkID:   "projects/garm-testing/regions/europe-west1/subnetworks/garm",
-				DiskSize:       100,
-				NicType:        "VIRTIO_NET",
-				CustomLabels:   map[string]string{"key1": "value1"},
-				NetworkTags:    []string{"tag1", "tag2"},
-				SourceSnapshot: "projects/garm-testing/global/snapshots/garm-snapshot",
+				NetworkID:       "projects/garm-testing/global/networks/garm-2",
+				SubnetworkID:    "projects/garm-testing/regions/europe-west1/subnetworks/garm",
+				DiskSize:        100,
+				NicType:         "VIRTIO_NET",
+				CustomLabels:    map[string]string{"key1": "value1"},
+				NetworkTags:     []string{"tag1", "tag2"},
+				SourceSnapshot:  "projects/garm-testing/global/snapshots/garm-snapshot",
+				EnableBootDebug: &enable_boot_debug,
 			},
 		},
 		{
@@ -147,6 +154,12 @@ func TestMergeExtraSpecs(t *testing.T) {
 					}
 				}
 			}
+			if tt.extraSpecs.EnableBootDebug != nil {
+				if *tt.extraSpecs.EnableBootDebug != spec.EnableBootDebug {
+					assert.Equal(t, *tt.extraSpecs.EnableBootDebug, spec.EnableBootDebug, "expected EnableBootDebug to be %t, got %t", *tt.extraSpecs.EnableBootDebug, spec.EnableBootDebug)
+				}
+			}
+
 		})
 	}
 }

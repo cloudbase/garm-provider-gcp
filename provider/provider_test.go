@@ -28,8 +28,10 @@ import (
 	"github.com/cloudbase/garm-provider-gcp/internal/spec"
 	"github.com/cloudbase/garm-provider-gcp/internal/util"
 	"github.com/googleapis/gax-go/v2"
+	"github.com/googleapis/gax-go/v2/apierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -92,7 +94,64 @@ func TestCreateInstance(t *testing.T) {
 	result, err := gcpProvider.CreateInstance(ctx, bootstrapParams)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedInstance, result)
+}
 
+func TestCreateInstanceError(t *testing.T) {
+	ctx := context.Background()
+	mockClient := new(client.MockGcpClient)
+	spec.DefaultToolFetch = func(osType params.OSType, osArch params.OSArch, tools []params.RunnerApplicationDownload) (params.RunnerApplicationDownload, error) {
+		return params.RunnerApplicationDownload{
+			OS:           proto.String("linux"),
+			Architecture: proto.String("amd64"),
+			DownloadURL:  proto.String("MockURL"),
+			Filename:     proto.String("garm-runner"),
+		}, nil
+	}
+	client.WaitOp = func(op *compute.Operation, ctx context.Context, opts ...gax.CallOption) error {
+		return nil
+	}
+	gcpProvider := &GcpProvider{
+		gcpCli:       &client.GcpCli{},
+		controllerID: "my-controller",
+	}
+	config := config.Config{
+		Zone:             "europe-west1-d",
+		ProjectId:        "my-project",
+		NetworkID:        "my-network",
+		SubnetworkID:     "my-subnetwork",
+		CredentialsFile:  "path/to/credentials.json",
+		ExternalIPAccess: true,
+	}
+	gcpProvider.gcpCli.SetClient(mockClient)
+	gcpProvider.gcpCli.SetConfig(&config)
+
+	mockOperation := &compute.Operation{}
+	mockErr, _ := apierror.FromError(&googleapi.Error{
+		Code: 404,
+	})
+	mockClient.On("Insert", mock.Anything, mock.Anything, mock.Anything).Return(mockOperation, mockErr)
+	bootstrapParams := params.BootstrapInstance{
+		Name:   "garm-instance",
+		Flavor: "n1-standard-1",
+		Image:  "projects/garm-testing/global/images/garm-image",
+		Tools: []params.RunnerApplicationDownload{
+			{
+				OS:           proto.String("linux"),
+				Architecture: proto.String("amd64"),
+				DownloadURL:  proto.String("MockURL"),
+				Filename:     proto.String("garm-runner"),
+			},
+		},
+		OSType:     params.Linux,
+		OSArch:     params.Amd64,
+		PoolID:     "my-pool",
+		ExtraSpecs: json.RawMessage(`{}`),
+	}
+	expectedInstance := params.ProviderInstance{}
+
+	result, err := gcpProvider.CreateInstance(ctx, bootstrapParams)
+	assert.Error(t, err)
+	assert.Equal(t, expectedInstance, result)
 }
 
 func TestGetInstance(t *testing.T) {

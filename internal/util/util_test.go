@@ -49,10 +49,47 @@ func TestGcpInstanceToParamsInstance(t *testing.T) {
 			errString: "",
 		},
 		{
+			name: "Name set in metadata",
+			gcpInstance: &computepb.Instance{
+				Name:   proto.String("garm-instance"),
+				Labels: map[string]string{"ostype": "linux"},
+				Disks:  []*computepb.AttachedDisk{{Architecture: proto.String("x86_64")}},
+				Metadata: &computepb.Metadata{
+					Items: []*computepb.Items{
+						{Key: proto.String("runner_name"), Value: proto.String("Garm-Instance")},
+					},
+				},
+				Status: proto.String("RUNNING"),
+			},
+			expected: params.ProviderInstance{
+				ProviderID: "garm-instance",
+				Name:       "Garm-Instance",
+				OSType:     "linux",
+				OSArch:     "x86_64",
+				Status:     "running",
+			},
+			errString: "",
+		},
+		{
 			name:        "NilGcpInstance",
 			gcpInstance: nil,
 			expected:    params.ProviderInstance{},
 			errString:   "instance ID is nil",
+		},
+		{
+			name: "NilName",
+			gcpInstance: &computepb.Instance{
+				Labels: map[string]string{"ostype": "linux"},
+				Disks:  []*computepb.AttachedDisk{{Architecture: proto.String("x86_64")}},
+				Metadata: &computepb.Metadata{
+					Items: []*computepb.Items{
+						{Key: proto.String("runner_name"), Value: proto.String("Garm-Instance")},
+					},
+				},
+				Status: proto.String("RUNNING"),
+			},
+			expected:  params.ProviderInstance{},
+			errString: "instance name is nil",
 		},
 	}
 
