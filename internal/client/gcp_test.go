@@ -26,8 +26,10 @@ import (
 	"github.com/cloudbase/garm-provider-gcp/internal/spec"
 	"github.com/cloudbase/garm-provider-gcp/internal/util"
 	"github.com/googleapis/gax-go/v2"
+	"github.com/googleapis/gax-go/v2/apierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -211,6 +213,76 @@ func TestDeleteInstance(t *testing.T) {
 
 	err := gcpCli.DeleteInstance(ctx, instanceName)
 	assert.NoError(t, err)
+
+	mockClient.AssertExpectations(t)
+}
+
+func TestDeleteInstanceNotFound(t *testing.T) {
+	ctx := context.Background()
+	mockClient := new(MockGcpClient)
+	WaitOp = func(op *compute.Operation, ctx context.Context, opts ...gax.CallOption) error {
+		return nil
+	}
+	gcpCli := &GcpCli{
+		cfg: &config.Config{
+			Zone:             "europe-west1-d",
+			ProjectId:        "my-project",
+			NetworkID:        "my-network",
+			SubnetworkID:     "my-subnetwork",
+			CredentialsFile:  "path/to/credentials.json",
+			ExternalIPAccess: true,
+		},
+		client: mockClient,
+	}
+
+	instanceName := "garm-instance"
+	mockOperation := &compute.Operation{}
+	mockErr, _ := apierror.FromError(&googleapi.Error{
+		Code: 404,
+	})
+	mockClient.On("Delete", ctx, &computepb.DeleteInstanceRequest{
+		Project:  gcpCli.cfg.ProjectId,
+		Zone:     gcpCli.cfg.Zone,
+		Instance: util.GetInstanceName(instanceName),
+	}, mock.Anything).Return(mockOperation, mockErr)
+
+	err := gcpCli.DeleteInstance(ctx, instanceName)
+	assert.NoError(t, err)
+
+	mockClient.AssertExpectations(t)
+}
+
+func TestDeleteInstanceError(t *testing.T) {
+	ctx := context.Background()
+	mockClient := new(MockGcpClient)
+	WaitOp = func(op *compute.Operation, ctx context.Context, opts ...gax.CallOption) error {
+		return nil
+	}
+	gcpCli := &GcpCli{
+		cfg: &config.Config{
+			Zone:             "europe-west1-d",
+			ProjectId:        "my-project",
+			NetworkID:        "my-network",
+			SubnetworkID:     "my-subnetwork",
+			CredentialsFile:  "path/to/credentials.json",
+			ExternalIPAccess: true,
+		},
+		client: mockClient,
+	}
+
+	instanceName := "garm-instance"
+	mockOperation := &compute.Operation{}
+	mockErr, _ := apierror.FromError(&googleapi.Error{
+		Code: 403,
+	})
+	mockClient.On("Delete", ctx, &computepb.DeleteInstanceRequest{
+		Project:  gcpCli.cfg.ProjectId,
+		Zone:     gcpCli.cfg.Zone,
+		Instance: util.GetInstanceName(instanceName),
+	}, mock.Anything).Return(mockOperation, mockErr)
+
+	err := gcpCli.DeleteInstance(ctx, instanceName)
+	assert.Error(t, err)
 
 	mockClient.AssertExpectations(t)
 }
