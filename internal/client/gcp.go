@@ -35,7 +35,7 @@ import (
 )
 
 const (
-	linuxStartupScript   string = "startup-script"
+	linuxUserData        string = "user-data"
 	windowsStartupScript string = "sysprep-specialize-script-ps1"
 	accessConfigType     string = "ONE_TO_ONE_NAT"
 )
@@ -293,7 +293,7 @@ func selectStartupScript(osType params.OSType) string {
 	case params.Windows:
 		return windowsStartupScript
 	case params.Linux:
-		return linuxStartupScript
+		return linuxUserData
 	default:
 		return ""
 	}

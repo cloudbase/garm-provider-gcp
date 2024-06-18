@@ -70,7 +70,9 @@ This will create a new Windows runner pool for the repo with ID `26ae13a1-13e9-4
 
 **NOTE**: If you want to use a custom image that you created, specify the image name in the following format: `projects/my_project/global/images/my-custom-image`
 
-Here is an example for a Linux pool that uses the image specified by its image name:
+Always find a recent image to use. For example, to see available Windows server 2022 images, run something like `gcloud compute images list --filter windows-2022` or just search [here](https://console.cloud.google.com/compute/images).
+
+Linux pools support **ONLY** images with **CLOUD-INIT** already installed. Before using a linux pool, you must be sure that the image has cloud-init installed. Here is an example for a Linux pool that uses a custom image with cloud-init specified by its image name:
 
 ```bash
 garm-cli pool create \
@@ -78,14 +80,18 @@ garm-cli pool create \
     --os-arch amd64 \
     --enabled=true \
     --flavor e2-medium \
-    --image  projects/debian-cloud/global/images/debian-11-bullseye-v20240110 \
+    --image  projects/garm-testing-424210/global/images/debian-cloud-init \
     --min-idle-runners 0 \
     --repo eb3f78b6-d667-4717-97c4-7aa1f3852138 \
     --tags gcp,linux \
     --provider-name gcp
 ```
 
-Always find a recent image to use. For example, to see available Windows server 2022 images, run something like `gcloud compute images list --filter windows-2022` or just search [here](https://console.cloud.google.com/compute/images).
+**NOTE:** In order to [create a custom image](https://cloud.google.com/compute/docs/images/create-custom#create_image) with cloud-init, you have to *create an instance* with your desired Linux OS. Then connect to that instance and install `cloud-init`. After the install is finished, you can stop that instance and from the `Disk` of that instance, create a custom image. As example, if you use `projects/debian-cloud/global/images/debian-12-bookworm-v20240617`, you can install cloud-init on the instance like this:
+
+```
+sudo apt update && sudo apt install -y cloud-init
+```
 
 ## Tweaking the provider
 

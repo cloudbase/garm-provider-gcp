@@ -33,7 +33,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestCreateInstance(t *testing.T) {
+func TestCreateInstanceLinux(t *testing.T) {
 	ctx := context.Background()
 	mockClient := new(MockGcpClient)
 	WaitOp = func(op *compute.Operation, ctx context.Context, opts ...gax.CallOption) error {
@@ -53,6 +53,9 @@ func TestCreateInstance(t *testing.T) {
 
 	mockOperation := &compute.Operation{}
 	mockClient.On("Insert", mock.Anything, mock.Anything, mock.Anything).Return(mockOperation, nil)
+	spec.DefaultCloudConfigFunc = func(bootstrapParams params.BootstrapInstance, tools params.RunnerApplicationDownload, runnerName string) (string, error) {
+		return "MockUserData", nil
+	}
 
 	spec := &spec.RunnerSpec{
 		Zone: "europe-west1-d",
@@ -81,10 +84,100 @@ func TestCreateInstance(t *testing.T) {
 
 	expectedInstance := &computepb.Instance{
 		Name: proto.String("garm-instance"),
+		Metadata: &computepb.Metadata{
+			Items: []*computepb.Items{
+				{
+					Key:   proto.String("runner_name"),
+					Value: proto.String("garm-instance"),
+				},
+				{
+					Key:   proto.String(linuxUserData),
+					Value: proto.String("MockUserData"),
+				},
+			},
+		},
 	}
 	result, err := gcpCli.CreateInstance(ctx, spec)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedInstance.Name, result.Name)
+	for key, value := range expectedInstance.Metadata.Items {
+		assert.Equal(t, *expectedInstance.Metadata.Items[key].Key, *value.Key)
+		assert.Equal(t, *expectedInstance.Metadata.Items[key].Value, *value.Value)
+	}
+	mockClient.AssertExpectations(t)
+}
+
+func TestCreateInstanceWindows(t *testing.T) {
+	ctx := context.Background()
+	mockClient := new(MockGcpClient)
+	WaitOp = func(op *compute.Operation, ctx context.Context, opts ...gax.CallOption) error {
+		return nil
+	}
+	gcpCli := &GcpCli{
+		cfg: &config.Config{
+			Zone:             "europe-west1-d",
+			ProjectId:        "my-project",
+			NetworkID:        "my-network",
+			SubnetworkID:     "my-subnetwork",
+			CredentialsFile:  "path/to/credentials.json",
+			ExternalIPAccess: true,
+		},
+		client: mockClient,
+	}
+
+	mockOperation := &compute.Operation{}
+	mockClient.On("Insert", mock.Anything, mock.Anything, mock.Anything).Return(mockOperation, nil)
+	spec.DefaultRunnerInstallScriptFunc = func(bootstrapParams params.BootstrapInstance, tools params.RunnerApplicationDownload, runnerName string) ([]byte, error) {
+		return []byte("MockUserData"), nil
+	}
+
+	spec := &spec.RunnerSpec{
+		Zone: "europe-west1-d",
+		Tools: params.RunnerApplicationDownload{
+			OS:           proto.String("windows"),
+			Architecture: proto.String("amd64"),
+			DownloadURL:  proto.String("MockURL"),
+			Filename:     proto.String("garm-runner"),
+		},
+		NetworkID:      "my-network",
+		SubnetworkID:   "my-subnetwork",
+		ControllerID:   "my-controller",
+		NicType:        "VIRTIO_NET",
+		DiskSize:       50,
+		CustomLabels:   map[string]string{"key1": "value1"},
+		NetworkTags:    []string{"tag1", "tag2"},
+		SourceSnapshot: "projects/garm-testing/global/snapshots/garm-snapshot",
+		BootstrapParams: params.BootstrapInstance{
+			Name:   "garm-instance",
+			Flavor: "n1-standard-1",
+			Image:  "projects/garm-testing/global/images/garm-image",
+			OSType: params.Windows,
+			OSArch: "amd64",
+		},
+	}
+
+	expectedInstance := &computepb.Instance{
+		Name: proto.String("garm-instance"),
+		Metadata: &computepb.Metadata{
+			Items: []*computepb.Items{
+				{
+					Key:   proto.String("runner_name"),
+					Value: proto.String("garm-instance"),
+				},
+				{
+					Key:   proto.String(windowsStartupScript),
+					Value: proto.String("MockUserData"),
+				},
+			},
+		},
+	}
+	result, err := gcpCli.CreateInstance(ctx, spec)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedInstance.Name, result.Name)
+	for key, value := range expectedInstance.Metadata.Items {
+		assert.Equal(t, *expectedInstance.Metadata.Items[key].Key, *value.Key)
+		assert.Equal(t, *expectedInstance.Metadata.Items[key].Value, *value.Value)
+	}
 	mockClient.AssertExpectations(t)
 }
 

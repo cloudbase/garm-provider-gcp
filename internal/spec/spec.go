@@ -16,15 +16,12 @@
 package spec
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"maps"
 	"regexp"
-	"strings"
 
 	"github.com/cloudbase/garm-provider-common/cloudconfig"
-	"github.com/cloudbase/garm-provider-common/defaults"
 	"github.com/cloudbase/garm-provider-common/params"
 	"github.com/cloudbase/garm-provider-common/util"
 	"github.com/cloudbase/garm-provider-gcp/config"
@@ -104,6 +101,8 @@ const (
 type ToolFetchFunc func(osType params.OSType, osArch params.OSArch, tools []params.RunnerApplicationDownload) (params.RunnerApplicationDownload, error)
 
 var DefaultToolFetch ToolFetchFunc = util.GetTools
+var DefaultCloudConfigFunc = cloudconfig.GetCloudConfig
+var DefaultRunnerInstallScriptFunc = cloudconfig.GetRunnerInstallScript
 
 func jsonSchemaValidation(schema json.RawMessage) error {
 	schemaLoader := gojsonschema.NewStringLoader(jsonSchema)
@@ -286,34 +285,18 @@ func (r RunnerSpec) ComposeUserData() (string, error) {
 
 	switch r.BootstrapParams.OSType {
 	case params.Linux:
-		udata, err := cloudconfig.GetRunnerInstallScript(r.BootstrapParams, r.Tools, r.BootstrapParams.Name)
+		// Get the cloud-init config
+		udata, err := DefaultCloudConfigFunc(bootstrapParams, r.Tools, bootstrapParams.Name)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate userdata: %w", err)
 		}
+		return udata, nil
 
-		asBase64 := base64.StdEncoding.EncodeToString(udata)
-		scriptCommands := []string{
-			"sudo useradd -m " + defaults.DefaultUser + " || true",
-			// Create the runner home directory if it doesn't exist
-			"sudo mkdir -p /home/" + defaults.DefaultUser,
-			// Add user to sudoers
-			"sudo usermod -aG sudo " + defaults.DefaultUser,
-			// Check curl and tar are installed
-			"sudo apt-get update && sudo apt-get install -y curl tar",
-			// Install the runner
-			"echo " + asBase64 + " | base64 -d > /install_runner.sh",
-			"chmod +x /install_runner.sh",
-			"echo 'runner  ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/garm",
-			"su -l -c /install_runner.sh " + defaults.DefaultUser,
-		}
-		script := strings.Join(scriptCommands, "\n")
-		return script, nil
 	case params.Windows:
-		udata, err := cloudconfig.GetRunnerInstallScript(bootstrapParams, r.Tools, bootstrapParams.Name)
+		udata, err := DefaultRunnerInstallScriptFunc(bootstrapParams, r.Tools, bootstrapParams.Name)
 		if err != nil {
 			return "", fmt.Errorf("failed to generate userdata: %w", err)
 		}
-
 		return string(udata), nil
 	}
 	return "", fmt.Errorf("unsupported OS type for cloud config: %s", r.BootstrapParams.OSType)
