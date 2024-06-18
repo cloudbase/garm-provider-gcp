@@ -147,6 +147,7 @@ func TestCreateInstanceWindows(t *testing.T) {
 		CustomLabels:   map[string]string{"key1": "value1"},
 		NetworkTags:    []string{"tag1", "tag2"},
 		SourceSnapshot: "projects/garm-testing/global/snapshots/garm-snapshot",
+		SSHKeys:        "MockSSHKey",
 		BootstrapParams: params.BootstrapInstance{
 			Name:   "garm-instance",
 			Flavor: "n1-standard-1",
@@ -167,6 +168,14 @@ func TestCreateInstanceWindows(t *testing.T) {
 				{
 					Key:   proto.String(windowsStartupScript),
 					Value: proto.String("MockUserData"),
+				},
+				{
+					Key:   proto.String("ssh-keys"),
+					Value: proto.String("MockSSHKey"),
+				},
+				{
+					Key:   proto.String("enable-windows-ssh"),
+					Value: proto.String("TRUE"),
 				},
 			},
 		},

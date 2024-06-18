@@ -42,6 +42,7 @@ func TestJsonSchemaValidation(t *testing.T) {
 				},
 				"network_tags": ["example_tag"],
 				"source_snapshot": "snapshot-id",
+				"ssh_keys": ["ssh-key", "ssh-key2"],
 				"enable_boot_debug": true,
 				"runner_install_template": "install-template",
 				"extra_context": {
@@ -99,6 +100,7 @@ func TestMergeExtraSpecs(t *testing.T) {
 				CustomLabels:    map[string]string{"key1": "value1"},
 				NetworkTags:     []string{"tag1", "tag2"},
 				SourceSnapshot:  "projects/garm-testing/global/snapshots/garm-snapshot",
+				SSHKeys:         []string{"ssh-key1", "ssh-key2"},
 				EnableBootDebug: &enable_boot_debug,
 			},
 		},

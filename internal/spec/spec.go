@@ -77,6 +77,13 @@ const (
 					"type": "string",
 					"description": "The source snapshot to create this disk."
 				},
+				"ssh_keys": {
+					"type": "array",
+					"description": "A list of SSH keys to be added to the instance.",
+					"items": {
+						"type": "string"
+					}
+				},
 				"enable_boot_debug": {
 					"type": "boolean",
 					"description": "Enable boot debug on the VM."
@@ -181,6 +188,7 @@ type extraSpecs struct {
 	CustomLabels    map[string]string `json:"custom_labels,omitempty"`
 	NetworkTags     []string          `json:"network_tags,omitempty"`
 	SourceSnapshot  string            `json:"source_snapshot,omitempty"`
+	SSHKeys         []string          `json:"ssh_keys,omitempty"`
 	EnableBootDebug *bool             `json:"enable_boot_debug"`
 }
 
@@ -230,6 +238,7 @@ type RunnerSpec struct {
 	CustomLabels    map[string]string
 	NetworkTags     []string
 	SourceSnapshot  string
+	SSHKeys         string
 	EnableBootDebug bool
 }
 
@@ -254,6 +263,11 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	}
 	if extraSpecs.SourceSnapshot != "" {
 		r.SourceSnapshot = extraSpecs.SourceSnapshot
+	}
+	if len(extraSpecs.SSHKeys) > 0 {
+		for key := range extraSpecs.SSHKeys {
+			r.SSHKeys = r.SSHKeys + "\n" + extraSpecs.SSHKeys[key]
+		}
 	}
 	if extraSpecs.EnableBootDebug != nil {
 		r.EnableBootDebug = *extraSpecs.EnableBootDebug
