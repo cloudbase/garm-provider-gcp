@@ -159,6 +159,10 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 					Key:   proto.String("runner_name"),
 					Value: proto.String(spec.BootstrapParams.Name),
 				},
+				{
+					Key:   proto.String("ssh-keys"),
+					Value: proto.String(spec.SSHKeys),
+				},
 			},
 		},
 		Labels: spec.CustomLabels,
@@ -169,6 +173,17 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 
 	if !g.cfg.ExternalIPAccess {
 		inst.NetworkInterfaces[0].AccessConfigs = nil
+	}
+
+	if spec.BootstrapParams.OSType == params.Windows && len(spec.SSHKeys) > 0 {
+		inst.Metadata.Items = append(inst.Metadata.Items, &computepb.Items{
+			Key:   proto.String("enable-windows-ssh"),
+			Value: proto.String("TRUE"),
+		})
+		inst.Metadata.Items = append(inst.Metadata.Items, &computepb.Items{
+			Key:   proto.String("sysprep-specialize-script-cmd"),
+			Value: proto.String("googet -noconfirm=true install google-compute-engine-ssh"),
+		})
 	}
 
 	insertReq := &computepb.InsertInstanceRequest{

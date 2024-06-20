@@ -139,6 +139,13 @@ To this end, this provider supports the following extra specs schema:
             "type": "string",
             "description": "The source snapshot to create this disk."
         },
+        "ssh_keys": {
+            "type": "array",
+            "description": "A list of SSH keys to be added to the instance. The format is USERNAME:SSH_KEY",
+            "items": {
+                "type": "string"
+            }
+        },
         "enable_boot_debug": {
             "type": "boolean",
             "description": "Enable boot debug on the VM."
@@ -155,7 +162,7 @@ To this end, this provider supports the following extra specs schema:
             }
         }
     },
-	"additionalProperties": false
+    "additionalProperties": false
 }
 ```
 
@@ -169,11 +176,14 @@ An example of extra specs json would look like this:
     "nic_type": "VIRTIO_NET",
     "custom_labels": {"environment":"production","project":"myproject"},
     "network_tags": ["web-server", "production"],
-    "source_snapshot": "projects/garm-testing/global/snapshots/garm-snapshot"
+    "source_snapshot": "projects/garm-testing/global/snapshots/garm-snapshot",
+    "ssh_keys": ["username1:ssh_key1", "username2:ssh_key2"]
 }
 ```
 
 **NOTE**: The `custom_labels` and `network_tags` must meet the [GCP requirements for labels](https://cloud.google.com/compute/docs/labeling-resources#requirements) and the [GCP requirements for network tags](https://cloud.google.com/vpc/docs/add-remove-network-tags#restrictions)!
+
+**NOTE**: The `ssh_keys` add the option to [connect to an instance via SSH](https://cloud.google.com/compute/docs/instances/ssh) (either Linux or Windows). After you added the key as `username:ssh_public_key`, you can use the `private_key` to connect to the Linux/Windows instance via `ssh -i private_rsa username@instance_ip`. For **Windows** instances, the provider installs on the instance `google-compute-engine-ssh` and `enables ssh` if a `ssh_key` is added to extra-specs.
 
 To set it on an existing pool, simply run:
 
