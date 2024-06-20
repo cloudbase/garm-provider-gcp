@@ -41,12 +41,11 @@ NOTE: If you want to pass in credentials by using the `GOOGLE_APPLICATION_CREDEN
   name = "gcp"
   provider_type = "external"
   description = "gcp provider"
-  # This is needed if you want GARM to pass this along to the provider.
-  environment_variables = ["GOOGLE_APPLICATION_CREDENTIALS"]
   [provider.external]
     provider_executable = "/opt/garm/providers.d/garm-provider-gcp"
     config_file = "/etc/garm/garm-provider-gcp.toml"
-
+    # This is needed if you want GARM to pass this along to the provider.
+    environment_variables = ["GOOGLE_APPLICATION_CREDENTIALS"]
 ```
 
 ## Creating a pool
