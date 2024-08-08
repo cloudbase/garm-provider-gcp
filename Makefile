@@ -24,7 +24,7 @@ build-static:
 	@echo Building
 	docker build --tag $(IMAGE_TAG) .
 	mkdir -p build
-	docker run --rm -e GARM_PROVIDER_NAME=$(GARM_PROVIDER_NAME) -e USER_ID=$(USER_ID) -e USER_GROUP=$(USER_GROUP) -v $(PWD)/build:/build/output:z -v $(PWD):/build/garm-provider-azure:z $(IMAGE_TAG) /build-static.sh
+	docker run --rm -e GARM_PROVIDER_NAME=$(GARM_PROVIDER_NAME) -e USER_ID=$(USER_ID) -e USER_GROUP=$(USER_GROUP) -v $(PWD)/build:/build/output:z -v $(PWD):/build/$(GARM_PROVIDER_NAME):z $(IMAGE_TAG) /build-static.sh
 	@echo Binaries are available in $(PWD)/build
 
 test: install-lint-deps verify go-test
