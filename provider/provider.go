@@ -19,7 +19,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cloudbase/garm-provider-common/execution"
+	execution "github.com/cloudbase/garm-provider-common/execution/v0.1.0"
 	"github.com/cloudbase/garm-provider-common/params"
 	"github.com/cloudbase/garm-provider-gcp/config"
 	"github.com/cloudbase/garm-provider-gcp/internal/client"
@@ -28,6 +28,8 @@ import (
 )
 
 var _ execution.ExternalProvider = &GcpProvider{}
+
+var Version = "v0.0.0-unknown"
 
 func NewGcpProvider(ctx context.Context, cfgFile string, controllerID string) (*GcpProvider, error) {
 	conf, err := config.NewConfig(cfgFile)
@@ -117,4 +119,8 @@ func (g *GcpProvider) Stop(ctx context.Context, instance string, force bool) err
 
 func (g *GcpProvider) Start(ctx context.Context, instance string) error {
 	return g.gcpCli.StartInstance(ctx, instance)
+}
+
+func (g *GcpProvider) GetVersion(ctx context.Context) string {
+	return Version
 }
