@@ -31,11 +31,11 @@ func TestJsonSchemaValidation(t *testing.T) {
 		errString string
 	}{
 		{
-			name: "Valid input",
+			name: "Full specs",
 			input: json.RawMessage(`{
 				"disksize": 127,
 				"network_id": "default",
-				"subnet_id": "default",
+				"subnetwork_id": "default",
 				"nic_type": "VIRTIO_NET",
 				"custom_labels": {
 					"example_label": "example_value"
@@ -44,19 +44,162 @@ func TestJsonSchemaValidation(t *testing.T) {
 				"source_snapshot": "snapshot-id",
 				"ssh_keys": ["ssh-key", "ssh-key2"],
 				"enable_boot_debug": true,
-				"runner_install_template": "install-template",
-				"extra_context": {
-					"key": "value"
+				"runner_install_template": "IyEvYmluL2Jhc2gKZWNobyBJbnN0YWxsaW5nIHJ1bm5lci4uLg==", "pre_install_scripts": {"setup.sh": "IyEvYmluL2Jhc2gKZWNobyBTZXR1cCBzY3JpcHQuLi4="}, "extra_context": {"key": "value"}
+				}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with disksize",
+			input: json.RawMessage(`{
+				"disksize": 127
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with network_id",
+			input: json.RawMessage(`{
+				"network_id": "default"
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with subnetwork_id",
+			input: json.RawMessage(`{
+				"subnetwork_id": "default"
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with nic_type",
+			input: json.RawMessage(`{
+				"nic_type": "VIRTIO_NET"
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with custom_labels",
+			input: json.RawMessage(`{
+				"custom_labels": {
+					"example_label": "example_value"
 				}
 			}`),
 			errString: "",
 		},
 		{
-			name: "Invalid input - wrong data type",
+			name: "Specs just with network_tags",
+			input: json.RawMessage(`{
+				"network_tags": ["example_tag"]
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with source_snapshot",
+			input: json.RawMessage(`{
+				"source_snapshot": "snapshot-id"
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with ssh_keys",
+			input: json.RawMessage(`{
+				"ssh_keys": ["ssh-key", "ssh-key2"]
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with enable_boot_debug",
+			input: json.RawMessage(`{
+				"enable_boot_debug": true
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with runner_install_template",
+			input: json.RawMessage(`{
+				"runner_install_template": "IyEvYmluL2Jhc2gKZWNobyBJbnN0YWxsaW5nIHJ1bm5lci4uLg=="
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with pre_install_scripts",
+			input: json.RawMessage(`{
+				"pre_install_scripts": {
+				"setup.sh": "IyEvYmluL2Jhc2gKZWNobyBTZXR1cCBzY3JpcHQuLi4="
+				}
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with extra_context",
+			input: json.RawMessage(`{
+				"extra_context": {
+				"key": "value"
+				}
+			}`),
+			errString: "",
+		},
+		{
+			name: "Invalid input for disksize - wrong data type",
 			input: json.RawMessage(`{
 				"disksize": "127"
 			}`),
 			errString: "schema validation failed: [disksize: Invalid type. Expected: integer, given: string]",
+		},
+		{
+			name: "Invalid input for nic_type - wrong data type",
+			input: json.RawMessage(`{
+				"nic_type": 127
+			}`),
+			errString: "schema validation failed: [nic_type: Invalid type. Expected: string, given: integer]",
+		},
+		{
+			name: "Invalid input for custom_labels - wrong data type",
+			input: json.RawMessage(`{
+				"custom_labels": "example_label"
+			}`),
+			errString: "schema validation failed: [custom_labels: Invalid type. Expected: object, given: string]",
+		},
+		{
+			name: "Invalid input for network_tags - wrong data type",
+			input: json.RawMessage(`{
+				"network_tags": "example_tag"
+			}`),
+			errString: "schema validation failed: [network_tags: Invalid type. Expected: array, given: string]",
+		},
+		{
+			name: "Invalid input for ssh_keys - wrong data type",
+			input: json.RawMessage(`{
+				"ssh_keys": "ssh-key"
+			}`),
+			errString: "schema validation failed: [ssh_keys: Invalid type. Expected: array, given: string]",
+		},
+		{
+			name: "Invalid input for enable_boot_debug - wrong data type",
+			input: json.RawMessage(`{
+				"enable_boot_debug": "true"
+			}`),
+			errString: "schema validation failed: [enable_boot_debug: Invalid type. Expected: boolean, given: string]",
+		},
+		{
+			name: "Invalid input for runner_install_template - wrong data type",
+			input: json.RawMessage(`{
+				"runner_install_template": 127
+			}`),
+			errString: "schema validation failed: [runner_install_template: Invalid type. Expected: string, given: integer]",
+		},
+		{
+			name: "Invalid input for pre_install_scripts - wrong data type",
+			input: json.RawMessage(`{
+				"pre_install_scripts": "setup.sh"
+			}`),
+			errString: "schema validation failed: [pre_install_scripts: Invalid type. Expected: object, given: string]",
+		},
+		{
+			name: "Invalid input for extra_context - wrong data type",
+			input: json.RawMessage(`{
+				"extra_context": "key"
+			}`),
+			errString: "schema validation failed: [extra_context: Invalid type. Expected: object, given: string]",
 		},
 		{
 			name: "Invalid input - additional property",
@@ -65,6 +208,13 @@ func TestJsonSchemaValidation(t *testing.T) {
 				"additional_property": "value"
 			}`),
 			errString: "Additional property additional_property is not allowed",
+		},
+		{
+			name: "Invalid json",
+			input: json.RawMessage(`{
+				"disksize":
+			`),
+			errString: "failed to validate schema",
 		},
 	}
 
