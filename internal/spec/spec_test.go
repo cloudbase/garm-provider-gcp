@@ -34,6 +34,7 @@ func TestJsonSchemaValidation(t *testing.T) {
 			name: "Full specs",
 			input: json.RawMessage(`{
 				"disksize": 127,
+				"disktype": "pd-ssd",
 				"network_id": "default",
 				"subnetwork_id": "default",
 				"nic_type": "VIRTIO_NET",
@@ -52,6 +53,13 @@ func TestJsonSchemaValidation(t *testing.T) {
 			name: "Specs just with disksize",
 			input: json.RawMessage(`{
 				"disksize": 127
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with disktype",
+			input: json.RawMessage(`{
+				"disktype": "pd-ssd"
 			}`),
 			errString: "",
 		},
@@ -144,6 +152,13 @@ func TestJsonSchemaValidation(t *testing.T) {
 				"disksize": "127"
 			}`),
 			errString: "schema validation failed: [disksize: Invalid type. Expected: integer, given: string]",
+		},
+		{
+			name: "Invalid input for disktype - wrong data type",
+			input: json.RawMessage(`{
+				"disktype": 127
+			}`),
+			errString: "schema validation failed: [disktype: Invalid type. Expected: string, given: integer]",
 		},
 		{
 			name: "Invalid input for nic_type - wrong data type",
@@ -246,6 +261,7 @@ func TestMergeExtraSpecs(t *testing.T) {
 				NetworkID:       "projects/garm-testing/global/networks/garm-2",
 				SubnetworkID:    "projects/garm-testing/regions/europe-west1/subnetworks/garm",
 				DiskSize:        100,
+				DiskType:        "pd-ssd",
 				NicType:         "VIRTIO_NET",
 				CustomLabels:    map[string]string{"key1": "value1"},
 				NetworkTags:     []string{"tag1", "tag2"},
@@ -266,6 +282,7 @@ func TestMergeExtraSpecs(t *testing.T) {
 				NetworkID:      "default-network",
 				SubnetworkID:   "default-subnetwork",
 				DiskSize:       50,
+				DiskType:       "pd-standard",
 				NicType:        "Standard",
 				CustomLabels:   map[string]string{"key2": "value2"},
 				NetworkTags:    []string{"tag3", "tag4"},
@@ -285,6 +302,11 @@ func TestMergeExtraSpecs(t *testing.T) {
 			if tt.extraSpecs.DiskSize != 0 {
 				if spec.DiskSize != tt.extraSpecs.DiskSize {
 					assert.Equal(t, tt.extraSpecs.DiskSize, spec.DiskSize, "expected DiskSize to be %d, got %d", tt.extraSpecs.DiskSize, spec.DiskSize)
+				}
+			}
+			if tt.extraSpecs.DiskType != "" {
+				if spec.DiskType != tt.extraSpecs.DiskType {
+					assert.Equal(t, tt.extraSpecs.DiskType, spec.DiskType, "expected DiskType to be %s, got %s", tt.extraSpecs.DiskType, spec.DiskType)
 				}
 			}
 			if tt.extraSpecs.NicType != "" {

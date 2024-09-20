@@ -128,6 +128,7 @@ func (e *extraSpecs) Validate() error {
 
 type extraSpecs struct {
 	DiskSize        int64             `json:"disksize,omitempty" jsonschema:"description=The size of the root disk in GB. Default is 127 GB."`
+	DiskType        string            `json:"disktype,omitempty" jsonschema:"description=The type of the disk. Default is pd-ssd."`
 	NetworkID       string            `json:"network_id,omitempty" jsonschema:"description=The name of the network attached to the instance."`
 	SubnetworkID    string            `json:"subnetwork_id,omitempty" jsonschema:"description=The name of the subnetwork attached to the instance."`
 	NicType         string            `json:"nic_type,omitempty" jsonschema:"description=The type of the network interface card. Default is VIRTIO_NET."`
@@ -183,6 +184,7 @@ type RunnerSpec struct {
 	ControllerID    string
 	NicType         string
 	DiskSize        int64
+	DiskType        string
 	CustomLabels    map[string]string
 	NetworkTags     []string
 	SourceSnapshot  string
@@ -199,6 +201,9 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	}
 	if extraSpecs.DiskSize > 0 {
 		r.DiskSize = extraSpecs.DiskSize
+	}
+	if extraSpecs.DiskType != "" {
+		r.DiskType = extraSpecs.DiskType
 	}
 	if extraSpecs.NicType != "" {
 		r.NicType = extraSpecs.NicType

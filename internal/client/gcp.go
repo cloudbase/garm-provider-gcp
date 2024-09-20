@@ -135,7 +135,7 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 	inst := &computepb.Instance{
 		Name:        proto.String(name),
 		MachineType: proto.String(util.GetMachineType(g.cfg.Zone, spec.BootstrapParams.Flavor)),
-		Disks:       generateBootDisk(spec.DiskSize, spec.BootstrapParams.Image, spec.SourceSnapshot),
+		Disks:       generateBootDisk(spec.DiskSize, spec.BootstrapParams.Image, spec.SourceSnapshot, spec.DiskType),
 		NetworkInterfaces: []*computepb.NetworkInterface{
 			{
 				Network: proto.String(g.cfg.NetworkID),
@@ -314,12 +314,14 @@ func selectStartupScript(osType params.OSType) string {
 	}
 }
 
-func generateBootDisk(diskSize int64, image, snapshot string) []*computepb.AttachedDisk {
+func generateBootDisk(diskSize int64, image, snapshot string, diskType string) []*computepb.AttachedDisk {
 	disk := []*computepb.AttachedDisk{
 		{
 			Boot: proto.Bool(true),
 			InitializeParams: &computepb.AttachedDiskInitializeParams{
-				DiskSizeGb:     proto.Int64(diskSize),
+				DiskSizeGb: proto.Int64(diskSize),
+				DiskType:   proto.String(diskType),
+				// Labels:         customLabels,
 				SourceImage:    proto.String(image),
 				SourceSnapshot: proto.String(snapshot),
 			},
