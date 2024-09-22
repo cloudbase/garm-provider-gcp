@@ -25,6 +25,7 @@ import (
 	"github.com/cloudbase/garm-provider-common/params"
 	"github.com/cloudbase/garm-provider-common/util"
 	"github.com/cloudbase/garm-provider-gcp/config"
+	"github.com/invopop/jsonschema"
 	"github.com/xeipuuv/gojsonschema"
 )
 
@@ -37,72 +38,6 @@ const (
 	customLabelKeyRegex   string = "^\\p{Ll}[\\p{Ll}0-9_-]{0,62}$"
 	customLabelValueRegex string = "^[\\p{Ll}0-9_-]{0,63}$"
 	networkTagRegex       string = "^[a-z][a-z0-9-]{0,61}[a-z0-9]$"
-	jsonSchema            string = `
-		{
-			"$schema": "http://cloudbase.it/garm-provider-gcp/schemas/extra_specs#",
-			"type": "object",
-			"description": "Schema defining supported extra specs for the Garm GCP Provider",
-			"properties": {
-				"disksize": {
-					"type": "integer",
-					"description": "The size of the root disk in GB. Default is 127 GB."
-				},
-				"network_id": {
-					"type": "string",
-					"description": "The name of the network attached to the instance."
-				},
-				"subnet_id": {
-					"type": "string",
-					"description": "The name of the subnetwork attached to the instance."
-				},
-				"nic_type": {
-					"type": "string",
-					"description": "The type of NIC attached to the instance. Default is VIRTIO_NET."
-				},
-				"custom_labels":{
-					"type": "object",
-					"description": "Custom labels to be attached to the instance. Each label is a key-value pair where both key and value are strings.",
-					"additionalProperties": {
-						"type": "string"
-					}
-				},
-				"network_tags": {
-					"type": "array",
-					"description": "A list of network tags to be attached to the instance.",
-					"items": {
-						"type": "string"
-					}
-				},
-				"source_snapshot": {
-					"type": "string",
-					"description": "The source snapshot to create this disk."
-				},
-				"ssh_keys": {
-					"type": "array",
-					"description": "A list of SSH keys to be added to the instance.",
-					"items": {
-						"type": "string"
-					}
-				},
-				"enable_boot_debug": {
-					"type": "boolean",
-					"description": "Enable boot debug on the VM."
-				},
-				"runner_install_template": {
-					"type": "string",
-					"description": "This option can be used to override the default runner install template. If used, the caller is responsible for the correctness of the template as well as the suitability of the template for the target OS. Use the extra_context extra spec if your template has variables in it that need to be expanded."
-				},
-				"extra_context": {
-					"type": "object",
-					"description": "Extra context that will be passed to the runner_install_template.",
-					"additionalProperties": {
-						"type": "string"
-					}
-				}
-			},
-			"additionalProperties": false
-		}
-	`
 )
 
 type ToolFetchFunc func(osType params.OSType, osArch params.OSArch, tools []params.RunnerApplicationDownload) (params.RunnerApplicationDownload, error)
@@ -111,8 +46,19 @@ var DefaultToolFetch ToolFetchFunc = util.GetTools
 var DefaultCloudConfigFunc = cloudconfig.GetCloudConfig
 var DefaultRunnerInstallScriptFunc = cloudconfig.GetRunnerInstallScript
 
+func generateJSONSchema() *jsonschema.Schema {
+	reflector := jsonschema.Reflector{
+		AllowAdditionalProperties: false,
+	}
+	// Reflect the extraSpecs struct
+	schema := reflector.Reflect(extraSpecs{})
+
+	return schema
+}
+
 func jsonSchemaValidation(schema json.RawMessage) error {
-	schemaLoader := gojsonschema.NewStringLoader(jsonSchema)
+	jsonSchema := generateJSONSchema()
+	schemaLoader := gojsonschema.NewGoLoader(jsonSchema)
 	extraSpecsLoader := gojsonschema.NewBytesLoader(schema)
 	result, err := gojsonschema.Validate(schemaLoader, extraSpecsLoader)
 	if err != nil {
@@ -181,15 +127,17 @@ func (e *extraSpecs) Validate() error {
 }
 
 type extraSpecs struct {
-	DiskSize        int64             `json:"disksize,omitempty"`
-	NetworkID       string            `json:"network_id,omitempty"`
-	SubnetworkID    string            `json:"subnetwork_id,omitempty"`
-	NicType         string            `json:"nic_type,omitempty"`
-	CustomLabels    map[string]string `json:"custom_labels,omitempty"`
-	NetworkTags     []string          `json:"network_tags,omitempty"`
-	SourceSnapshot  string            `json:"source_snapshot,omitempty"`
-	SSHKeys         []string          `json:"ssh_keys,omitempty"`
-	EnableBootDebug *bool             `json:"enable_boot_debug"`
+	DiskSize        int64             `json:"disksize,omitempty" jsonschema:"description=The size of the root disk in GB. Default is 127 GB."`
+	NetworkID       string            `json:"network_id,omitempty" jsonschema:"description=The name of the network attached to the instance."`
+	SubnetworkID    string            `json:"subnetwork_id,omitempty" jsonschema:"description=The name of the subnetwork attached to the instance."`
+	NicType         string            `json:"nic_type,omitempty" jsonschema:"description=The type of the network interface card. Default is VIRTIO_NET."`
+	CustomLabels    map[string]string `json:"custom_labels,omitempty" jsonschema:"description=Custom labels to apply to the instance. Each label is a key-value pair where both key and value are strings."`
+	NetworkTags     []string          `json:"network_tags,omitempty" jsonschema:"description=A list of network tags to be attached to the instance"`
+	SourceSnapshot  string            `json:"source_snapshot,omitempty" jsonschema:"description=The source snapshot to create this disk."`
+	SSHKeys         []string          `json:"ssh_keys,omitempty" jsonschema:"description=A list of SSH keys to be added to the instance. The format is USERNAME:SSH_KEY"`
+	EnableBootDebug *bool             `json:"enable_boot_debug,omitempty" jsonschema:"description=Enable boot debug on the VM."`
+	// The Cloudconfig struct from common package
+	cloudconfig.CloudConfigSpec
 }
 
 func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapInstance, controllerID string) (*RunnerSpec, error) {

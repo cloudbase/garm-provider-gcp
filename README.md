@@ -112,7 +112,7 @@ To this end, this provider supports the following extra specs schema:
             "type": "string",
             "description": "The name of the network attached to the instance."
         },
-        "subnet_id": {
+        "subnetwork_id": {
             "type": "string",
             "description": "The name of the subnetwork attached to the instance."
         },
@@ -171,7 +171,7 @@ An example of extra specs json would look like this:
 {
     "disksize": 255,
     "network_id": "projects/garm-testing/global/networks/garm-2",
-    "subnet_id": "projects/garm-testing/regions/europe-west1/subnetworks/garm",
+    "subnetwork_id": "projects/garm-testing/regions/europe-west1/subnetworks/garm",
     "nic_type": "VIRTIO_NET",
     "custom_labels": {"environment":"production","project":"myproject"},
     "network_tags": ["web-server", "production"],
