@@ -128,7 +128,7 @@ func (e *extraSpecs) Validate() error {
 
 type extraSpecs struct {
 	DiskSize        int64             `json:"disksize,omitempty" jsonschema:"description=The size of the root disk in GB. Default is 127 GB."`
-	DiskType        string            `json:"disktype,omitempty" jsonschema:"description=The type of the disk. Default is pd-ssd."`
+	DiskType        string            `json:"disktype,omitempty" jsonschema:"description=The type of the disk. Default is pd-standard."`
 	DisplayDevice   bool              `json:"display_device,omitempty" jsonschema:"description=Enable the display device on the VM."`
 	NetworkID       string            `json:"network_id,omitempty" jsonschema:"description=The name of the network attached to the instance."`
 	SubnetworkID    string            `json:"subnetwork_id,omitempty" jsonschema:"description=The name of the subnetwork attached to the instance."`

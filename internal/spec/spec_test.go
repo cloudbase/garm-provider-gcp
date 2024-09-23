@@ -67,7 +67,7 @@ func TestJsonSchemaValidation(t *testing.T) {
 		{
 			name: "Specs just with disktype",
 			input: json.RawMessage(`{
-				"disktype": "pd-ssd"
+				"disktype": "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd"
 			}`),
 			errString: "",
 		},
@@ -275,8 +275,9 @@ func TestMergeExtraSpecs(t *testing.T) {
 			extraSpecs: &extraSpecs{
 				NetworkID:       "projects/garm-testing/global/networks/garm-2",
 				SubnetworkID:    "projects/garm-testing/regions/europe-west1/subnetworks/garm",
+				DisplayDevice:   true,
 				DiskSize:        100,
-				DiskType:        "pd-ssd",
+				DiskType:        "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd",
 				NicType:         "VIRTIO_NET",
 				CustomLabels:    map[string]string{"key1": "value1"},
 				NetworkTags:     []string{"tag1", "tag2"},
@@ -296,8 +297,9 @@ func TestMergeExtraSpecs(t *testing.T) {
 			spec := &RunnerSpec{
 				NetworkID:      "default-network",
 				SubnetworkID:   "default-subnetwork",
+				DisplayDevice:  true,
 				DiskSize:       50,
-				DiskType:       "pd-standard",
+				DiskType:       "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd",
 				NicType:        "Standard",
 				CustomLabels:   map[string]string{"key2": "value2"},
 				NetworkTags:    []string{"tag3", "tag4"},

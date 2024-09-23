@@ -104,9 +104,17 @@ To this end, this provider supports the following extra specs schema:
     "type": "object",
     "description": "Schema defining supported extra specs for the Garm GCP Provider",
     "properties": {
+        "display_device": {
+            "type": "boolean",
+            "description": "Enable the display device on the VM."
+        },
         "disksize": {
             "type": "integer",
             "description": "The size of the root disk in GB. Default is 127 GB."
+        },
+        "disktype": {
+            "type": "string",
+            "description": "The type of the disk. Default is pd-standard."
         },
         "network_id": {
             "type": "string",
@@ -169,7 +177,9 @@ An example of extra specs json would look like this:
 
 ```bash
 {
+    "display_device": true,
     "disksize": 255,
+    "disktype": "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd",
     "network_id": "projects/garm-testing/global/networks/garm-2",
     "subnetwork_id": "projects/garm-testing/regions/europe-west1/subnetworks/garm",
     "nic_type": "VIRTIO_NET",
