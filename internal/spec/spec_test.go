@@ -33,6 +33,7 @@ func TestJsonSchemaValidation(t *testing.T) {
 		{
 			name: "Full specs",
 			input: json.RawMessage(`{
+				"display_device": true,
 				"disksize": 127,
 				"disktype": "pd-ssd",
 				"network_id": "default",
@@ -47,6 +48,13 @@ func TestJsonSchemaValidation(t *testing.T) {
 				"enable_boot_debug": true,
 				"runner_install_template": "IyEvYmluL2Jhc2gKZWNobyBJbnN0YWxsaW5nIHJ1bm5lci4uLg==", "pre_install_scripts": {"setup.sh": "IyEvYmluL2Jhc2gKZWNobyBTZXR1cCBzY3JpcHQuLi4="}, "extra_context": {"key": "value"}
 				}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with display_device",
+			input: json.RawMessage(`{
+				"display_device": true
+			}`),
 			errString: "",
 		},
 		{
@@ -145,6 +153,13 @@ func TestJsonSchemaValidation(t *testing.T) {
 				}
 			}`),
 			errString: "",
+		},
+		{
+			name: "Invalid input for display_device - wrong data type",
+			input: json.RawMessage(`{
+				"display_device": "true"
+			}`),
+			errString: "schema validation failed: [display_device: Invalid type. Expected: boolean, given: string]",
 		},
 		{
 			name: "Invalid input for disksize - wrong data type",

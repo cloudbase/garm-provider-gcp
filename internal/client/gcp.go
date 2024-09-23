@@ -136,6 +136,9 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 		Name:        proto.String(name),
 		MachineType: proto.String(util.GetMachineType(g.cfg.Zone, spec.BootstrapParams.Flavor)),
 		Disks:       generateBootDisk(spec.DiskSize, spec.BootstrapParams.Image, spec.SourceSnapshot, spec.DiskType, spec.CustomLabels),
+		DisplayDevice: &computepb.DisplayDevice{
+			EnableDisplay: proto.Bool(spec.DisplayDevice),
+		},
 		NetworkInterfaces: []*computepb.NetworkInterface{
 			{
 				Network: proto.String(g.cfg.NetworkID),
