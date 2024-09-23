@@ -142,6 +142,13 @@ To this end, this provider supports the following extra specs schema:
                 "type": "string"
             }
         },
+        "service_accounts": {
+            "type": "array",
+            "description": "A list of service accounts to be attached to the instance",
+            "items": {
+                "$ref": "#/$defs/ServiceAccount"
+            }
+        },
         "source_snapshot": {
             "type": "string",
             "description": "The source snapshot to create this disk."
@@ -185,10 +192,13 @@ An example of extra specs json would look like this:
     "nic_type": "VIRTIO_NET",
     "custom_labels": {"environment":"production","project":"myproject"},
     "network_tags": ["web-server", "production"],
+    "service_accounts": [{"email":"email@email.com", "scopes":["https://www.googleapis.com/auth/devstorage.read_only", "https://www.googleapis.com/auth/logging.write"]}],
     "source_snapshot": "projects/garm-testing/global/snapshots/garm-snapshot",
     "ssh_keys": ["username1:ssh_key1", "username2:ssh_key2"]
 }
 ```
+
+**NOTE**: Using the `service_accounts` extra specs when creating instances **introduces certain risks that must be carefully managed**. **Service accounts** grant access to specific resources, and if improperly configured, they can expose sensitive data or allow unauthorized actions. Misconfigured permissions or overly broad scopes can lead to privilege escalation, enabling attackers or unintended users to access critical resources. It's essential to follow the principle of least privilege, ensuring that service accounts only have the necessary permissions for their intended tasks. Regular audits and proper key management are also crucial to safeguard access and prevent potential security vulnerabilities.
 
 **NOTE**: The `custom_labels` and `network_tags` must meet the [GCP requirements for labels](https://cloud.google.com/compute/docs/labeling-resources#requirements) and the [GCP requirements for network tags](https://cloud.google.com/vpc/docs/add-remove-network-tags#restrictions)!
 

@@ -172,6 +172,7 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 		Tags: &computepb.Tags{
 			Items: spec.NetworkTags,
 		},
+		ServiceAccounts: spec.ServiceAccounts,
 	}
 
 	if !g.cfg.ExternalIPAccess {

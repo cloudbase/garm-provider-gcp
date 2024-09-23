@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"testing"
 
+	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestJsonSchemaValidation(t *testing.T) {
@@ -43,6 +45,8 @@ func TestJsonSchemaValidation(t *testing.T) {
 					"example_label": "example_value"
 				},
 				"network_tags": ["example_tag"],
+				"service_accounts": [{"email": "email", "scopes": ["scope"]}],
+				"service_accounts": [{"email": "email", "scopes": ["scope", "scope2"]}, {"email": "email2", "scopes": ["scope2"]}],
 				"source_snapshot": "snapshot-id",
 				"ssh_keys": ["ssh-key", "ssh-key2"],
 				"enable_boot_debug": true,
@@ -105,6 +109,13 @@ func TestJsonSchemaValidation(t *testing.T) {
 			name: "Specs just with network_tags",
 			input: json.RawMessage(`{
 				"network_tags": ["example_tag"]
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with service_accounts",
+			input: json.RawMessage(`{
+				"service_accounts": [{"email": "email", "scopes": ["scope"]}]
 			}`),
 			errString: "",
 		},
@@ -197,6 +208,13 @@ func TestJsonSchemaValidation(t *testing.T) {
 			errString: "schema validation failed: [network_tags: Invalid type. Expected: array, given: string]",
 		},
 		{
+			name: "Invalid input for service_accounts - wrong data type",
+			input: json.RawMessage(`{
+				"service_accounts": "email"
+			}`),
+			errString: "schema validation failed: [service_accounts: Invalid type. Expected: array, given: string]",
+		},
+		{
 			name: "Invalid input for ssh_keys - wrong data type",
 			input: json.RawMessage(`{
 				"ssh_keys": "ssh-key"
@@ -273,14 +291,20 @@ func TestMergeExtraSpecs(t *testing.T) {
 		{
 			name: "ValidExtraSpecs",
 			extraSpecs: &extraSpecs{
-				NetworkID:       "projects/garm-testing/global/networks/garm-2",
-				SubnetworkID:    "projects/garm-testing/regions/europe-west1/subnetworks/garm",
-				DisplayDevice:   true,
-				DiskSize:        100,
-				DiskType:        "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd",
-				NicType:         "VIRTIO_NET",
-				CustomLabels:    map[string]string{"key1": "value1"},
-				NetworkTags:     []string{"tag1", "tag2"},
+				NetworkID:     "projects/garm-testing/global/networks/garm-2",
+				SubnetworkID:  "projects/garm-testing/regions/europe-west1/subnetworks/garm",
+				DisplayDevice: true,
+				DiskSize:      100,
+				DiskType:      "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd",
+				NicType:       "VIRTIO_NET",
+				CustomLabels:  map[string]string{"key1": "value1"},
+				NetworkTags:   []string{"tag1", "tag2"},
+				ServiceAccounts: []*computepb.ServiceAccount{
+					{
+						Email:  proto.String("email"),
+						Scopes: []string{"scope"},
+					},
+				},
 				SourceSnapshot:  "projects/garm-testing/global/snapshots/garm-snapshot",
 				SSHKeys:         []string{"ssh-key1", "ssh-key2"},
 				EnableBootDebug: &enable_boot_debug,
