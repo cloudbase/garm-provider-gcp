@@ -324,13 +324,16 @@ func generateBootDisk(diskSize int64, image, snapshot string, diskType string, c
 			Boot: proto.Bool(true),
 			InitializeParams: &computepb.AttachedDiskInitializeParams{
 				DiskSizeGb:     proto.Int64(diskSize),
-				DiskType:       proto.String(diskType),
 				Labels:         customLabels,
 				SourceImage:    proto.String(image),
 				SourceSnapshot: proto.String(snapshot),
 			},
 			AutoDelete: proto.Bool(true),
 		},
+	}
+
+	if diskType != "" {
+		disk[0].InitializeParams.DiskType = proto.String(diskType)
 	}
 
 	if snapshot != "" {
