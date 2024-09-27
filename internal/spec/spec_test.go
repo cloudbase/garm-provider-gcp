@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"testing"
 
+	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestJsonSchemaValidation(t *testing.T) {
@@ -33,7 +35,9 @@ func TestJsonSchemaValidation(t *testing.T) {
 		{
 			name: "Full specs",
 			input: json.RawMessage(`{
+				"display_device": true,
 				"disksize": 127,
+				"disktype": "pd-ssd",
 				"network_id": "default",
 				"subnetwork_id": "default",
 				"nic_type": "VIRTIO_NET",
@@ -41,6 +45,8 @@ func TestJsonSchemaValidation(t *testing.T) {
 					"example_label": "example_value"
 				},
 				"network_tags": ["example_tag"],
+				"service_accounts": [{"email": "email", "scopes": ["scope"]}],
+				"service_accounts": [{"email": "email", "scopes": ["scope", "scope2"]}, {"email": "email2", "scopes": ["scope2"]}],
 				"source_snapshot": "snapshot-id",
 				"ssh_keys": ["ssh-key", "ssh-key2"],
 				"enable_boot_debug": true,
@@ -49,9 +55,23 @@ func TestJsonSchemaValidation(t *testing.T) {
 			errString: "",
 		},
 		{
+			name: "Specs just with display_device",
+			input: json.RawMessage(`{
+				"display_device": true
+			}`),
+			errString: "",
+		},
+		{
 			name: "Specs just with disksize",
 			input: json.RawMessage(`{
 				"disksize": 127
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with disktype",
+			input: json.RawMessage(`{
+				"disktype": "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd"
 			}`),
 			errString: "",
 		},
@@ -89,6 +109,13 @@ func TestJsonSchemaValidation(t *testing.T) {
 			name: "Specs just with network_tags",
 			input: json.RawMessage(`{
 				"network_tags": ["example_tag"]
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with service_accounts",
+			input: json.RawMessage(`{
+				"service_accounts": [{"email": "email", "scopes": ["scope"]}]
 			}`),
 			errString: "",
 		},
@@ -139,11 +166,25 @@ func TestJsonSchemaValidation(t *testing.T) {
 			errString: "",
 		},
 		{
+			name: "Invalid input for display_device - wrong data type",
+			input: json.RawMessage(`{
+				"display_device": "true"
+			}`),
+			errString: "schema validation failed: [display_device: Invalid type. Expected: boolean, given: string]",
+		},
+		{
 			name: "Invalid input for disksize - wrong data type",
 			input: json.RawMessage(`{
 				"disksize": "127"
 			}`),
 			errString: "schema validation failed: [disksize: Invalid type. Expected: integer, given: string]",
+		},
+		{
+			name: "Invalid input for disktype - wrong data type",
+			input: json.RawMessage(`{
+				"disktype": 127
+			}`),
+			errString: "schema validation failed: [disktype: Invalid type. Expected: string, given: integer]",
 		},
 		{
 			name: "Invalid input for nic_type - wrong data type",
@@ -165,6 +206,13 @@ func TestJsonSchemaValidation(t *testing.T) {
 				"network_tags": "example_tag"
 			}`),
 			errString: "schema validation failed: [network_tags: Invalid type. Expected: array, given: string]",
+		},
+		{
+			name: "Invalid input for service_accounts - wrong data type",
+			input: json.RawMessage(`{
+				"service_accounts": "email"
+			}`),
+			errString: "schema validation failed: [service_accounts: Invalid type. Expected: array, given: string]",
 		},
 		{
 			name: "Invalid input for ssh_keys - wrong data type",
@@ -243,12 +291,20 @@ func TestMergeExtraSpecs(t *testing.T) {
 		{
 			name: "ValidExtraSpecs",
 			extraSpecs: &extraSpecs{
-				NetworkID:       "projects/garm-testing/global/networks/garm-2",
-				SubnetworkID:    "projects/garm-testing/regions/europe-west1/subnetworks/garm",
-				DiskSize:        100,
-				NicType:         "VIRTIO_NET",
-				CustomLabels:    map[string]string{"key1": "value1"},
-				NetworkTags:     []string{"tag1", "tag2"},
+				NetworkID:     "projects/garm-testing/global/networks/garm-2",
+				SubnetworkID:  "projects/garm-testing/regions/europe-west1/subnetworks/garm",
+				DisplayDevice: true,
+				DiskSize:      100,
+				DiskType:      "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd",
+				NicType:       "VIRTIO_NET",
+				CustomLabels:  map[string]string{"key1": "value1"},
+				NetworkTags:   []string{"tag1", "tag2"},
+				ServiceAccounts: []*computepb.ServiceAccount{
+					{
+						Email:  proto.String("email"),
+						Scopes: []string{"scope"},
+					},
+				},
 				SourceSnapshot:  "projects/garm-testing/global/snapshots/garm-snapshot",
 				SSHKeys:         []string{"ssh-key1", "ssh-key2"},
 				EnableBootDebug: &enable_boot_debug,
@@ -265,7 +321,9 @@ func TestMergeExtraSpecs(t *testing.T) {
 			spec := &RunnerSpec{
 				NetworkID:      "default-network",
 				SubnetworkID:   "default-subnetwork",
+				DisplayDevice:  true,
 				DiskSize:       50,
+				DiskType:       "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd",
 				NicType:        "Standard",
 				CustomLabels:   map[string]string{"key2": "value2"},
 				NetworkTags:    []string{"tag3", "tag4"},
@@ -285,6 +343,11 @@ func TestMergeExtraSpecs(t *testing.T) {
 			if tt.extraSpecs.DiskSize != 0 {
 				if spec.DiskSize != tt.extraSpecs.DiskSize {
 					assert.Equal(t, tt.extraSpecs.DiskSize, spec.DiskSize, "expected DiskSize to be %d, got %d", tt.extraSpecs.DiskSize, spec.DiskSize)
+				}
+			}
+			if tt.extraSpecs.DiskType != "" {
+				if spec.DiskType != tt.extraSpecs.DiskType {
+					assert.Equal(t, tt.extraSpecs.DiskType, spec.DiskType, "expected DiskType to be %s, got %s", tt.extraSpecs.DiskType, spec.DiskType)
 				}
 			}
 			if tt.extraSpecs.NicType != "" {

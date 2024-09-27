@@ -104,9 +104,17 @@ To this end, this provider supports the following extra specs schema:
     "type": "object",
     "description": "Schema defining supported extra specs for the Garm GCP Provider",
     "properties": {
+        "display_device": {
+            "type": "boolean",
+            "description": "Enable the display device on the VM."
+        },
         "disksize": {
             "type": "integer",
             "description": "The size of the root disk in GB. Default is 127 GB."
+        },
+        "disktype": {
+            "type": "string",
+            "description": "The type of the disk. Default is pd-standard."
         },
         "network_id": {
             "type": "string",
@@ -132,6 +140,13 @@ To this end, this provider supports the following extra specs schema:
             "description": "A list of network tags to be attached to the instance.",
             "items": {
                 "type": "string"
+            }
+        },
+        "service_accounts": {
+            "type": "array",
+            "description": "A list of service accounts to be attached to the instance",
+            "items": {
+                "$ref": "#/$defs/ServiceAccount"
             }
         },
         "source_snapshot": {
@@ -169,16 +184,21 @@ An example of extra specs json would look like this:
 
 ```bash
 {
+    "display_device": true,
     "disksize": 255,
+    "disktype": "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd",
     "network_id": "projects/garm-testing/global/networks/garm-2",
     "subnetwork_id": "projects/garm-testing/regions/europe-west1/subnetworks/garm",
     "nic_type": "VIRTIO_NET",
     "custom_labels": {"environment":"production","project":"myproject"},
     "network_tags": ["web-server", "production"],
+    "service_accounts": [{"email":"email@email.com", "scopes":["https://www.googleapis.com/auth/devstorage.read_only", "https://www.googleapis.com/auth/logging.write"]}],
     "source_snapshot": "projects/garm-testing/global/snapshots/garm-snapshot",
     "ssh_keys": ["username1:ssh_key1", "username2:ssh_key2"]
 }
 ```
+
+**NOTE**: Using the `service_accounts` extra specs when creating instances **introduces certain risks that must be carefully managed**. **Service accounts** grant access to specific resources, and if improperly configured, they can expose sensitive data or allow unauthorized actions. Misconfigured permissions or overly broad scopes can lead to privilege escalation, enabling attackers or unintended users to access critical resources. It's essential to follow the principle of least privilege, ensuring that service accounts only have the necessary permissions for their intended tasks. Regular audits and proper key management are also crucial to safeguard access and prevent potential security vulnerabilities.
 
 **NOTE**: The `custom_labels` and `network_tags` must meet the [GCP requirements for labels](https://cloud.google.com/compute/docs/labeling-resources#requirements) and the [GCP requirements for network tags](https://cloud.google.com/vpc/docs/add-remove-network-tags#restrictions)!
 

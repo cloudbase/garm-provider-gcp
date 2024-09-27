@@ -21,6 +21,7 @@ import (
 	"maps"
 	"regexp"
 
+	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/cloudbase/garm-provider-common/cloudconfig"
 	"github.com/cloudbase/garm-provider-common/params"
 	"github.com/cloudbase/garm-provider-common/util"
@@ -127,15 +128,18 @@ func (e *extraSpecs) Validate() error {
 }
 
 type extraSpecs struct {
-	DiskSize        int64             `json:"disksize,omitempty" jsonschema:"description=The size of the root disk in GB. Default is 127 GB."`
-	NetworkID       string            `json:"network_id,omitempty" jsonschema:"description=The name of the network attached to the instance."`
-	SubnetworkID    string            `json:"subnetwork_id,omitempty" jsonschema:"description=The name of the subnetwork attached to the instance."`
-	NicType         string            `json:"nic_type,omitempty" jsonschema:"description=The type of the network interface card. Default is VIRTIO_NET."`
-	CustomLabels    map[string]string `json:"custom_labels,omitempty" jsonschema:"description=Custom labels to apply to the instance. Each label is a key-value pair where both key and value are strings."`
-	NetworkTags     []string          `json:"network_tags,omitempty" jsonschema:"description=A list of network tags to be attached to the instance"`
-	SourceSnapshot  string            `json:"source_snapshot,omitempty" jsonschema:"description=The source snapshot to create this disk."`
-	SSHKeys         []string          `json:"ssh_keys,omitempty" jsonschema:"description=A list of SSH keys to be added to the instance. The format is USERNAME:SSH_KEY"`
-	EnableBootDebug *bool             `json:"enable_boot_debug,omitempty" jsonschema:"description=Enable boot debug on the VM."`
+	DiskSize        int64                       `json:"disksize,omitempty" jsonschema:"description=The size of the root disk in GB. Default is 127 GB."`
+	DiskType        string                      `json:"disktype,omitempty" jsonschema:"description=The type of the disk. Default is pd-standard."`
+	DisplayDevice   bool                        `json:"display_device,omitempty" jsonschema:"description=Enable the display device on the VM."`
+	NetworkID       string                      `json:"network_id,omitempty" jsonschema:"description=The name of the network attached to the instance."`
+	SubnetworkID    string                      `json:"subnetwork_id,omitempty" jsonschema:"description=The name of the subnetwork attached to the instance."`
+	NicType         string                      `json:"nic_type,omitempty" jsonschema:"description=The type of the network interface card. Default is VIRTIO_NET."`
+	CustomLabels    map[string]string           `json:"custom_labels,omitempty" jsonschema:"description=Custom labels to apply to the instance. Each label is a key-value pair where both key and value are strings."`
+	NetworkTags     []string                    `json:"network_tags,omitempty" jsonschema:"description=A list of network tags to be attached to the instance"`
+	ServiceAccounts []*computepb.ServiceAccount `json:"service_accounts,omitempty" jsonschema:"description=A list of service accounts to be attached to the instance"`
+	SourceSnapshot  string                      `json:"source_snapshot,omitempty" jsonschema:"description=The source snapshot to create this disk."`
+	SSHKeys         []string                    `json:"ssh_keys,omitempty" jsonschema:"description=A list of SSH keys to be added to the instance. The format is USERNAME:SSH_KEY"`
+	EnableBootDebug *bool                       `json:"enable_boot_debug,omitempty" jsonschema:"description=Enable boot debug on the VM."`
 	// The Cloudconfig struct from common package
 	cloudconfig.CloudConfigSpec
 }
@@ -182,9 +186,12 @@ type RunnerSpec struct {
 	SubnetworkID    string
 	ControllerID    string
 	NicType         string
+	DisplayDevice   bool
 	DiskSize        int64
+	DiskType        string
 	CustomLabels    map[string]string
 	NetworkTags     []string
+	ServiceAccounts []*computepb.ServiceAccount
 	SourceSnapshot  string
 	SSHKeys         string
 	EnableBootDebug bool
@@ -197,8 +204,14 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	if extraSpecs.SubnetworkID != "" {
 		r.SubnetworkID = extraSpecs.SubnetworkID
 	}
+	if extraSpecs.DisplayDevice {
+		r.DisplayDevice = extraSpecs.DisplayDevice
+	}
 	if extraSpecs.DiskSize > 0 {
 		r.DiskSize = extraSpecs.DiskSize
+	}
+	if extraSpecs.DiskType != "" {
+		r.DiskType = extraSpecs.DiskType
 	}
 	if extraSpecs.NicType != "" {
 		r.NicType = extraSpecs.NicType
@@ -208,6 +221,9 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	}
 	if len(extraSpecs.NetworkTags) > 0 {
 		r.NetworkTags = extraSpecs.NetworkTags
+	}
+	if len(extraSpecs.ServiceAccounts) > 0 {
+		r.ServiceAccounts = extraSpecs.ServiceAccounts
 	}
 	if extraSpecs.SourceSnapshot != "" {
 		r.SourceSnapshot = extraSpecs.SourceSnapshot
