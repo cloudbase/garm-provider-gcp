@@ -50,6 +50,7 @@ func TestJsonSchemaValidation(t *testing.T) {
 				"source_snapshot": "snapshot-id",
 				"ssh_keys": ["ssh-key", "ssh-key2"],
 				"enable_boot_debug": true,
+				"disable_updates": false,
 				"runner_install_template": "IyEvYmluL2Jhc2gKZWNobyBJbnN0YWxsaW5nIHJ1bm5lci4uLg==", "pre_install_scripts": {"setup.sh": "IyEvYmluL2Jhc2gKZWNobyBTZXR1cCBzY3JpcHQuLi4="}, "extra_context": {"key": "value"}
 				}`),
 			errString: "",
@@ -137,6 +138,20 @@ func TestJsonSchemaValidation(t *testing.T) {
 			name: "Specs just with enable_boot_debug",
 			input: json.RawMessage(`{
 				"enable_boot_debug": true
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with disable_updates true",
+			input: json.RawMessage(`{
+				"disable_updates": true
+			}`),
+			errString: "",
+		},
+		{
+			name: "Specs just with disable_updates false",
+			input: json.RawMessage(`{
+				"disable_updates": false
 			}`),
 			errString: "",
 		},
@@ -229,6 +244,13 @@ func TestJsonSchemaValidation(t *testing.T) {
 			errString: "schema validation failed: [enable_boot_debug: Invalid type. Expected: boolean, given: string]",
 		},
 		{
+			name: "Invalid input for disable_updates - wrong data type",
+			input: json.RawMessage(`{
+				"disable_updates": "false"
+			}`),
+			errString: "schema validation failed: [disable_updates: Invalid type. Expected: boolean, given: string]",
+		},
+		{
 			name: "Invalid input for runner_install_template - wrong data type",
 			input: json.RawMessage(`{
 				"runner_install_template": 127
@@ -286,6 +308,7 @@ func TestMergeExtraSpecs(t *testing.T) {
 	enable_boot_debug := true
 	tests := []struct {
 		name       string
+		name       string
 		extraSpecs *extraSpecs
 	}{
 		{
@@ -307,7 +330,26 @@ func TestMergeExtraSpecs(t *testing.T) {
 				},
 				SourceSnapshot:  "projects/garm-testing/global/snapshots/garm-snapshot",
 				SSHKeys:         []string{"ssh-key1", "ssh-key2"},
-				EnableBootDebug: &enable_boot_debug,
+				CloudConfigSpec: cloudconfig.CloudConfigSpec{
+					EnableBootDebug: &enable_boot_debug,
+					DisableUpdates:  proto.Bool(true),
+				},
+			},
+		},
+		{
+			name: "ValidExtraSpecsWithDisableUpdatesFalse",
+			extraSpecs: &extraSpecs{
+				CloudConfigSpec: cloudconfig.CloudConfigSpec{
+					DisableUpdates: proto.Bool(false),
+				},
+			},
+		},
+		{
+			name: "ValidExtraSpecsWithEnableBootDebugFalse",
+			extraSpecs: &extraSpecs{
+				CloudConfigSpec: cloudconfig.CloudConfigSpec{
+					EnableBootDebug: proto.Bool(false),
+				},
 			},
 		},
 		{
@@ -320,6 +362,7 @@ func TestMergeExtraSpecs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			spec := &RunnerSpec{
 				NetworkID:      "default-network",
+				DisableUpdates: false, // Default value
 				SubnetworkID:   "default-subnetwork",
 				DisplayDevice:  true,
 				DiskSize:       50,
@@ -328,6 +371,7 @@ func TestMergeExtraSpecs(t *testing.T) {
 				CustomLabels:   map[string]string{"key2": "value2"},
 				NetworkTags:    []string{"tag3", "tag4"},
 				SourceSnapshot: "default-snapshot",
+				EnableBootDebug: false, // Default value
 			}
 			spec.MergeExtraSpecs(tt.extraSpecs)
 			if tt.extraSpecs.NetworkID != "" {
@@ -369,12 +413,20 @@ func TestMergeExtraSpecs(t *testing.T) {
 					}
 				}
 			}
-			if tt.extraSpecs.EnableBootDebug != nil {
-				if *tt.extraSpecs.EnableBootDebug != spec.EnableBootDebug {
-					assert.Equal(t, *tt.extraSpecs.EnableBootDebug, spec.EnableBootDebug, "expected EnableBootDebug to be %t, got %t", *tt.extraSpecs.EnableBootDebug, spec.EnableBootDebug)
-				}
+			// Check EnableBootDebug from embedded CloudConfigSpec or direct field if overridden
+			expectedEnableBootDebug := spec.EnableBootDebug // Keep default if not set in extraSpecs
+			if tt.extraSpecs.EnableBootDebug != nil { // Direct field in extraSpecs takes precedence
+				expectedEnableBootDebug = *tt.extraSpecs.EnableBootDebug
+			} else if tt.extraSpecs.CloudConfigSpec.EnableBootDebug != nil {
+				expectedEnableBootDebug = *tt.extraSpecs.CloudConfigSpec.EnableBootDebug
 			}
-
+			assert.Equal(t, expectedEnableBootDebug, spec.EnableBootDebug, "expected EnableBootDebug to be %t, got %t", expectedEnableBootDebug, spec.EnableBootDebug)
+			
+			expectedDisableUpdates := false // Default for RunnerSpec.DisableUpdates
+			if tt.extraSpecs.CloudConfigSpec.DisableUpdates != nil {
+				expectedDisableUpdates = *tt.extraSpecs.CloudConfigSpec.DisableUpdates
+			}
+			assert.Equal(t, expectedDisableUpdates, spec.DisableUpdates, "expected DisableUpdates to be %t, got %t", expectedDisableUpdates, spec.DisableUpdates)
 		})
 	}
 }

@@ -140,6 +140,7 @@ type extraSpecs struct {
 	SourceSnapshot  string                      `json:"source_snapshot,omitempty" jsonschema:"description=The source snapshot to create this disk."`
 	SSHKeys         []string                    `json:"ssh_keys,omitempty" jsonschema:"description=A list of SSH keys to be added to the instance. The format is USERNAME:SSH_KEY"`
 	EnableBootDebug *bool                       `json:"enable_boot_debug,omitempty" jsonschema:"description=Enable boot debug on the VM."`
+	DisableUpdates        *bool                  `json:"disable_updates,omitempty" jsonschema:"description=Disable OS updates on boot."`
 	// The Cloudconfig struct from common package
 	cloudconfig.CloudConfigSpec
 }
@@ -195,6 +196,7 @@ type RunnerSpec struct {
 	SourceSnapshot  string
 	SSHKeys         string
 	EnableBootDebug bool
+	DisableUpdates  bool
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
@@ -236,6 +238,9 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	if extraSpecs.EnableBootDebug != nil {
 		r.EnableBootDebug = *extraSpecs.EnableBootDebug
 	}
+	if extraSpecs.DisableUpdates != nil {
+		r.DisableUpdates = *extraSpecs.DisableUpdates
+	}
 }
 
 func (r *RunnerSpec) Validate() error {
@@ -260,6 +265,7 @@ func (r *RunnerSpec) Validate() error {
 func (r RunnerSpec) ComposeUserData() (string, error) {
 	bootstrapParams := r.BootstrapParams
 	bootstrapParams.UserDataOptions.EnableBootDebug = r.EnableBootDebug
+	bootstrapParams.UserDataOptions.DisableUpdatesOnBoot = r.DisableUpdates
 
 	switch r.BootstrapParams.OSType {
 	case params.Linux:
