@@ -195,6 +195,7 @@ type RunnerSpec struct {
 	SourceSnapshot  string
 	SSHKeys         string
 	EnableBootDebug bool
+	DisableUpdates  bool
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
@@ -236,6 +237,9 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	if extraSpecs.EnableBootDebug != nil {
 		r.EnableBootDebug = *extraSpecs.EnableBootDebug
 	}
+	// if extraSpecs.DisableUpdates != nil { // Access promoted field from embedded CloudConfigSpec
+	// 	r.DisableUpdates = *extraSpecs.DisableUpdates
+	// }
 }
 
 func (r *RunnerSpec) Validate() error {
@@ -260,6 +264,7 @@ func (r *RunnerSpec) Validate() error {
 func (r RunnerSpec) ComposeUserData() (string, error) {
 	bootstrapParams := r.BootstrapParams
 	bootstrapParams.UserDataOptions.EnableBootDebug = r.EnableBootDebug
+	// bootstrapParams.UserDataOptions.DisableUpdates = r.DisableUpdates
 
 	switch r.BootstrapParams.OSType {
 	case params.Linux:
