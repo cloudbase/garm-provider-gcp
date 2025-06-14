@@ -1,4 +1,4 @@
-// Copyright 2024 Google LLC
+// Copyright 2025 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
+	"log/slog"
 	"math"
 	"net/http"
 	"net/url"
@@ -29,7 +29,6 @@ import (
 
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
 	gax "github.com/googleapis/gax-go/v2"
-	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/api/option/internaloption"
@@ -46,6 +45,7 @@ type DisksCallOptions struct {
 	AddResourcePolicies       []gax.CallOption
 	AggregatedList            []gax.CallOption
 	BulkInsert                []gax.CallOption
+	BulkSetLabels             []gax.CallOption
 	CreateSnapshot            []gax.CallOption
 	Delete                    []gax.CallOption
 	Get                       []gax.CallOption
@@ -81,6 +81,9 @@ func defaultDisksRESTCallOptions() *DisksCallOptions {
 			}),
 		},
 		BulkInsert: []gax.CallOption{
+			gax.WithTimeout(600000 * time.Millisecond),
+		},
+		BulkSetLabels: []gax.CallOption{
 			gax.WithTimeout(600000 * time.Millisecond),
 		},
 		CreateSnapshot: []gax.CallOption{
@@ -166,6 +169,7 @@ type internalDisksClient interface {
 	AddResourcePolicies(context.Context, *computepb.AddResourcePoliciesDiskRequest, ...gax.CallOption) (*Operation, error)
 	AggregatedList(context.Context, *computepb.AggregatedListDisksRequest, ...gax.CallOption) *DisksScopedListPairIterator
 	BulkInsert(context.Context, *computepb.BulkInsertDiskRequest, ...gax.CallOption) (*Operation, error)
+	BulkSetLabels(context.Context, *computepb.BulkSetLabelsDiskRequest, ...gax.CallOption) (*Operation, error)
 	CreateSnapshot(context.Context, *computepb.CreateSnapshotDiskRequest, ...gax.CallOption) (*Operation, error)
 	Delete(context.Context, *computepb.DeleteDiskRequest, ...gax.CallOption) (*Operation, error)
 	Get(context.Context, *computepb.GetDiskRequest, ...gax.CallOption) (*computepb.Disk, error)
@@ -231,6 +235,11 @@ func (c *DisksClient) AggregatedList(ctx context.Context, req *computepb.Aggrega
 // BulkInsert bulk create a set of disks.
 func (c *DisksClient) BulkInsert(ctx context.Context, req *computepb.BulkInsertDiskRequest, opts ...gax.CallOption) (*Operation, error) {
 	return c.internalClient.BulkInsert(ctx, req, opts...)
+}
+
+// BulkSetLabels sets the labels on many disks at once. To learn more about labels, read the Labeling Resources documentation.
+func (c *DisksClient) BulkSetLabels(ctx context.Context, req *computepb.BulkSetLabelsDiskRequest, opts ...gax.CallOption) (*Operation, error) {
+	return c.internalClient.BulkSetLabels(ctx, req, opts...)
 }
 
 // CreateSnapshot creates a snapshot of a specified persistent disk. For regular snapshot creation, consider using snapshots.insert instead, as that method supports more features, such as creating snapshots in a project different from the source disk project.
@@ -324,6 +333,8 @@ type disksRESTClient struct {
 
 	// Points back to the CallOptions field of the containing DisksClient
 	CallOptions **DisksCallOptions
+
+	logger *slog.Logger
 }
 
 // NewDisksRESTClient creates a new disks rest client.
@@ -341,6 +352,7 @@ func NewDisksRESTClient(ctx context.Context, opts ...option.ClientOption) (*Disk
 		endpoint:    endpoint,
 		httpClient:  httpClient,
 		CallOptions: &callOpts,
+		logger:      internaloption.GetLogger(opts),
 	}
 	c.setGoogleClientInfo()
 
@@ -365,6 +377,7 @@ func defaultDisksRESTClientOptions() []option.ClientOption {
 		internaloption.WithDefaultUniverseDomain("googleapis.com"),
 		internaloption.WithDefaultAudience("https://compute.googleapis.com/"),
 		internaloption.WithDefaultScopes(DefaultAuthScopes()...),
+		internaloption.EnableNewAuthLibrary(),
 	}
 }
 
@@ -373,8 +386,10 @@ func defaultDisksRESTClientOptions() []option.ClientOption {
 // use by Google-written clients.
 func (c *disksRESTClient) setGoogleClientInfo(keyval ...string) {
 	kv := append([]string{"gl-go", gax.GoVersion}, keyval...)
-	kv = append(kv, "gapic", getVersionClient(), "gax", gax.Version, "rest", "UNKNOWN")
-	c.xGoogHeaders = []string{"x-goog-api-client", gax.XGoogHeader(kv...)}
+	kv = append(kv, "gapic", getVersionClient(), "gax", gax.Version, "rest", "UNKNOWN", "pb", protoVersion)
+	c.xGoogHeaders = []string{
+		"x-goog-api-client", gax.XGoogHeader(kv...),
+	}
 }
 
 // Close closes the connection to the API service. The user should invoke this when
@@ -437,17 +452,7 @@ func (c *disksRESTClient) AddResourcePolicies(ctx context.Context, req *computep
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, jsonReq, "AddResourcePolicies")
 		if err != nil {
 			return err
 		}
@@ -483,7 +488,7 @@ func (c *disksRESTClient) AggregatedList(ctx context.Context, req *computepb.Agg
 			req.PageToken = proto.String(pageToken)
 		}
 		if pageSize > math.MaxInt32 {
-			req.MaxResults = proto.Uint32(math.MaxInt32)
+			req.MaxResults = proto.Uint32(uint32(math.MaxInt32))
 		} else if pageSize != 0 {
 			req.MaxResults = proto.Uint32(uint32(pageSize))
 		}
@@ -531,21 +536,10 @@ func (c *disksRESTClient) AggregatedList(ctx context.Context, req *computepb.Agg
 			}
 			httpReq.Header = headers
 
-			httpRsp, err := c.httpClient.Do(httpReq)
+			buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, nil, "AggregatedList")
 			if err != nil {
 				return err
 			}
-			defer httpRsp.Body.Close()
-
-			if err = googleapi.CheckResponse(httpRsp); err != nil {
-				return err
-			}
-
-			buf, err := io.ReadAll(httpRsp.Body)
-			if err != nil {
-				return err
-			}
-
 			if err := unm.Unmarshal(buf, resp); err != nil {
 				return err
 			}
@@ -624,17 +618,77 @@ func (c *disksRESTClient) BulkInsert(ctx context.Context, req *computepb.BulkIns
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, jsonReq, "BulkInsert")
 		if err != nil {
 			return err
 		}
-		defer httpRsp.Body.Close()
 
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
+		if err := unm.Unmarshal(buf, resp); err != nil {
 			return err
 		}
 
-		buf, err := io.ReadAll(httpRsp.Body)
+		return nil
+	}, opts...)
+	if e != nil {
+		return nil, e
+	}
+	op := &Operation{
+		&zoneOperationsHandle{
+			c:       c.operationClient,
+			proto:   resp,
+			project: req.GetProject(),
+			zone:    req.GetZone(),
+		},
+	}
+	return op, nil
+}
+
+// BulkSetLabels sets the labels on many disks at once. To learn more about labels, read the Labeling Resources documentation.
+func (c *disksRESTClient) BulkSetLabels(ctx context.Context, req *computepb.BulkSetLabelsDiskRequest, opts ...gax.CallOption) (*Operation, error) {
+	m := protojson.MarshalOptions{AllowPartial: true}
+	body := req.GetBulkZoneSetLabelsRequestResource()
+	jsonReq, err := m.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+
+	baseUrl, err := url.Parse(c.endpoint)
+	if err != nil {
+		return nil, err
+	}
+	baseUrl.Path += fmt.Sprintf("/compute/v1/projects/%v/zones/%v/disks/bulkSetLabels", req.GetProject(), req.GetZone())
+
+	params := url.Values{}
+	if req != nil && req.RequestId != nil {
+		params.Add("requestId", fmt.Sprintf("%v", req.GetRequestId()))
+	}
+	if req != nil && req.Resource != nil {
+		params.Add("resource", fmt.Sprintf("%v", req.GetResource()))
+	}
+
+	baseUrl.RawQuery = params.Encode()
+
+	// Build HTTP headers from client and context metadata.
+	hds := []string{"x-goog-request-params", fmt.Sprintf("%s=%v&%s=%v", "project", url.QueryEscape(req.GetProject()), "zone", url.QueryEscape(req.GetZone()))}
+
+	hds = append(c.xGoogHeaders, hds...)
+	hds = append(hds, "Content-Type", "application/json")
+	headers := gax.BuildHeaders(ctx, hds...)
+	opts = append((*c.CallOptions).BulkSetLabels[0:len((*c.CallOptions).BulkSetLabels):len((*c.CallOptions).BulkSetLabels)], opts...)
+	unm := protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}
+	resp := &computepb.Operation{}
+	e := gax.Invoke(ctx, func(ctx context.Context, settings gax.CallSettings) error {
+		if settings.Path != "" {
+			baseUrl.Path = settings.Path
+		}
+		httpReq, err := http.NewRequest("POST", baseUrl.String(), bytes.NewReader(jsonReq))
+		if err != nil {
+			return err
+		}
+		httpReq = httpReq.WithContext(ctx)
+		httpReq.Header = headers
+
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, jsonReq, "BulkSetLabels")
 		if err != nil {
 			return err
 		}
@@ -704,17 +758,7 @@ func (c *disksRESTClient) CreateSnapshot(ctx context.Context, req *computepb.Cre
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, jsonReq, "CreateSnapshot")
 		if err != nil {
 			return err
 		}
@@ -774,17 +818,7 @@ func (c *disksRESTClient) Delete(ctx context.Context, req *computepb.DeleteDiskR
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, nil, "Delete")
 		if err != nil {
 			return err
 		}
@@ -837,17 +871,7 @@ func (c *disksRESTClient) Get(ctx context.Context, req *computepb.GetDiskRequest
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, nil, "Get")
 		if err != nil {
 			return err
 		}
@@ -899,17 +923,7 @@ func (c *disksRESTClient) GetIamPolicy(ctx context.Context, req *computepb.GetIa
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, nil, "GetIamPolicy")
 		if err != nil {
 			return err
 		}
@@ -971,17 +985,7 @@ func (c *disksRESTClient) Insert(ctx context.Context, req *computepb.InsertDiskR
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, jsonReq, "Insert")
 		if err != nil {
 			return err
 		}
@@ -1017,7 +1021,7 @@ func (c *disksRESTClient) List(ctx context.Context, req *computepb.ListDisksRequ
 			req.PageToken = proto.String(pageToken)
 		}
 		if pageSize > math.MaxInt32 {
-			req.MaxResults = proto.Uint32(math.MaxInt32)
+			req.MaxResults = proto.Uint32(uint32(math.MaxInt32))
 		} else if pageSize != 0 {
 			req.MaxResults = proto.Uint32(uint32(pageSize))
 		}
@@ -1059,21 +1063,10 @@ func (c *disksRESTClient) List(ctx context.Context, req *computepb.ListDisksRequ
 			}
 			httpReq.Header = headers
 
-			httpRsp, err := c.httpClient.Do(httpReq)
+			buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, nil, "List")
 			if err != nil {
 				return err
 			}
-			defer httpRsp.Body.Close()
-
-			if err = googleapi.CheckResponse(httpRsp); err != nil {
-				return err
-			}
-
-			buf, err := io.ReadAll(httpRsp.Body)
-			if err != nil {
-				return err
-			}
-
 			if err := unm.Unmarshal(buf, resp); err != nil {
 				return err
 			}
@@ -1145,17 +1138,7 @@ func (c *disksRESTClient) RemoveResourcePolicies(ctx context.Context, req *compu
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, jsonReq, "RemoveResourcePolicies")
 		if err != nil {
 			return err
 		}
@@ -1222,17 +1205,7 @@ func (c *disksRESTClient) Resize(ctx context.Context, req *computepb.ResizeDiskR
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, jsonReq, "Resize")
 		if err != nil {
 			return err
 		}
@@ -1292,17 +1265,7 @@ func (c *disksRESTClient) SetIamPolicy(ctx context.Context, req *computepb.SetIa
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, jsonReq, "SetIamPolicy")
 		if err != nil {
 			return err
 		}
@@ -1361,17 +1324,7 @@ func (c *disksRESTClient) SetLabels(ctx context.Context, req *computepb.SetLabel
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, jsonReq, "SetLabels")
 		if err != nil {
 			return err
 		}
@@ -1438,17 +1391,7 @@ func (c *disksRESTClient) StartAsyncReplication(ctx context.Context, req *comput
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, jsonReq, "StartAsyncReplication")
 		if err != nil {
 			return err
 		}
@@ -1508,17 +1451,7 @@ func (c *disksRESTClient) StopAsyncReplication(ctx context.Context, req *compute
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, nil, "StopAsyncReplication")
 		if err != nil {
 			return err
 		}
@@ -1585,17 +1518,7 @@ func (c *disksRESTClient) StopGroupAsyncReplication(ctx context.Context, req *co
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, jsonReq, "StopGroupAsyncReplication")
 		if err != nil {
 			return err
 		}
@@ -1655,17 +1578,7 @@ func (c *disksRESTClient) TestIamPermissions(ctx context.Context, req *computepb
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, jsonReq, "TestIamPermissions")
 		if err != nil {
 			return err
 		}
@@ -1730,17 +1643,7 @@ func (c *disksRESTClient) Update(ctx context.Context, req *computepb.UpdateDiskR
 		httpReq = httpReq.WithContext(ctx)
 		httpReq.Header = headers
 
-		httpRsp, err := c.httpClient.Do(httpReq)
-		if err != nil {
-			return err
-		}
-		defer httpRsp.Body.Close()
-
-		if err = googleapi.CheckResponse(httpRsp); err != nil {
-			return err
-		}
-
-		buf, err := io.ReadAll(httpRsp.Body)
+		buf, err := executeHTTPRequest(ctx, c.httpClient, httpReq, c.logger, jsonReq, "Update")
 		if err != nil {
 			return err
 		}

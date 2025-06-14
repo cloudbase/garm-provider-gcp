@@ -12,7 +12,7 @@ GARM_PROVIDER_NAME := garm-provider-gcp
 
 default: build
 
-.PHONY : build build-static test install-lint-deps lint go-test fmt fmtcheck verify-vendor verify create-release-files release
+.PHONY : build build-static test lint go-test fmt fmtcheck verify-vendor verify create-release-files release
 
 build:
 	@$(GO) build .
@@ -27,13 +27,10 @@ build-static:
 	docker run --rm -e GARM_PROVIDER_NAME=$(GARM_PROVIDER_NAME) -e USER_ID=$(USER_ID) -e USER_GROUP=$(USER_GROUP) -v $(PWD)/build:/build/output:z -v $(PWD):/build/$(GARM_PROVIDER_NAME):z $(IMAGE_TAG) /build-static.sh
 	@echo Binaries are available in $(PWD)/build
 
-test: install-lint-deps verify go-test
+test: golangci-lint verify go-test
 
-install-lint-deps:
-	@$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-
-lint:
-	@golangci-lint run --timeout=8m --build-tags testing
+lint: golangci-lint
+	@$(GOLANGCI_LINT) run --timeout=8m --build-tags testing
 
 go-test:
 	@$(GO) test -race -mod=vendor -tags testing -v $(TEST_ARGS) -timeout=15m -parallel=4 -count=1 ./...
@@ -58,3 +55,21 @@ create-release-files:
 	./scripts/make-release.sh
 
 release: build-static create-release-files ## Create a release
+
+## Location to install dependencies to
+LOCALBIN ?= $(shell pwd)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
+
+## Tool Binaries
+GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
+
+## Tool Versions
+GOLANGCI_LINT_VERSION ?= v1.64.8
+
+.PHONY: golangci-lint
+golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary. If wrong version is installed, it will be overwritten.
+$(GOLANGCI_LINT): $(LOCALBIN)
+	test -s $(LOCALBIN)/golangci-lint && $(LOCALBIN)/golangci-lint --version | grep -q $(GOLANGCI_LINT_VERSION) || \
+        GOBIN=$(LOCALBIN) go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+

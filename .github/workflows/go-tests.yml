@@ -25,5 +25,4 @@ jobs:
 
       - name: Run GARM Go Tests
         run: |
-            make install-lint-deps
             make test
