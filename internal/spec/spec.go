@@ -140,7 +140,7 @@ type extraSpecs struct {
 	SourceSnapshot  string                      `json:"source_snapshot,omitempty" jsonschema:"description=The source snapshot to create this disk."`
 	SSHKeys         []string                    `json:"ssh_keys,omitempty" jsonschema:"description=A list of SSH keys to be added to the instance. The format is USERNAME:SSH_KEY"`
 	EnableBootDebug *bool                       `json:"enable_boot_debug,omitempty" jsonschema:"description=Enable boot debug on the VM."`
-	DisableUpdates        *bool                  `json:"disable_updates,omitempty" jsonschema:"description=Disable OS updates on boot."`
+	DisableUpdates  *bool                       `json:"disable_updates,omitempty" jsonschema:"description=Disable OS updates on boot."`
 	// The Cloudconfig struct from common package
 	cloudconfig.CloudConfigSpec
 }

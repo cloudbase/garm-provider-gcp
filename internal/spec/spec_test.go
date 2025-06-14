@@ -354,16 +354,16 @@ func TestMergeExtraSpecs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			spec := &RunnerSpec{
-				NetworkID:      "default-network",
-				DisableUpdates: false, // Default value
-				SubnetworkID:   "default-subnetwork",
-				DisplayDevice:  true,
-				DiskSize:       50,
-				DiskType:       "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd",
-				NicType:        "Standard",
-				CustomLabels:   map[string]string{"key2": "value2"},
-				NetworkTags:    []string{"tag3", "tag4"},
-				SourceSnapshot: "default-snapshot",
+				NetworkID:       "default-network",
+				DisableUpdates:  false, // Default value
+				SubnetworkID:    "default-subnetwork",
+				DisplayDevice:   true,
+				DiskSize:        50,
+				DiskType:        "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd",
+				NicType:         "Standard",
+				CustomLabels:    map[string]string{"key2": "value2"},
+				NetworkTags:     []string{"tag3", "tag4"},
+				SourceSnapshot:  "default-snapshot",
 				EnableBootDebug: false, // Default value
 			}
 			spec.MergeExtraSpecs(tt.extraSpecs)
@@ -412,7 +412,7 @@ func TestMergeExtraSpecs(t *testing.T) {
 				expectedEnableBootDebug = *tt.extraSpecs.EnableBootDebug
 			}
 			assert.Equal(t, expectedEnableBootDebug, spec.EnableBootDebug, "expected EnableBootDebug to be %t, got %t", expectedEnableBootDebug, spec.EnableBootDebug)
-			
+
 			expectedDisableUpdates := false // Default for RunnerSpec.DisableUpdates
 			if tt.extraSpecs.DisableUpdates != nil {
 				expectedDisableUpdates = *tt.extraSpecs.DisableUpdates
