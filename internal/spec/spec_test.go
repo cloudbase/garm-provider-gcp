@@ -308,7 +308,6 @@ func TestMergeExtraSpecs(t *testing.T) {
 	enable_boot_debug := true
 	tests := []struct {
 		name       string
-		name       string
 		extraSpecs *extraSpecs
 	}{
 		{
@@ -330,26 +329,20 @@ func TestMergeExtraSpecs(t *testing.T) {
 				},
 				SourceSnapshot:  "projects/garm-testing/global/snapshots/garm-snapshot",
 				SSHKeys:         []string{"ssh-key1", "ssh-key2"},
-				CloudConfigSpec: cloudconfig.CloudConfigSpec{
-					EnableBootDebug: &enable_boot_debug,
-					DisableUpdates:  proto.Bool(true),
-				},
+				EnableBootDebug: &enable_boot_debug,
+				DisableUpdates:  proto.Bool(true),
 			},
 		},
 		{
 			name: "ValidExtraSpecsWithDisableUpdatesFalse",
 			extraSpecs: &extraSpecs{
-				CloudConfigSpec: cloudconfig.CloudConfigSpec{
-					DisableUpdates: proto.Bool(false),
-				},
+				DisableUpdates: proto.Bool(false),
 			},
 		},
 		{
 			name: "ValidExtraSpecsWithEnableBootDebugFalse",
 			extraSpecs: &extraSpecs{
-				CloudConfigSpec: cloudconfig.CloudConfigSpec{
-					EnableBootDebug: proto.Bool(false),
-				},
+				EnableBootDebug: proto.Bool(false),
 			},
 		},
 		{
@@ -415,16 +408,14 @@ func TestMergeExtraSpecs(t *testing.T) {
 			}
 			// Check EnableBootDebug from embedded CloudConfigSpec or direct field if overridden
 			expectedEnableBootDebug := spec.EnableBootDebug // Keep default if not set in extraSpecs
-			if tt.extraSpecs.EnableBootDebug != nil { // Direct field in extraSpecs takes precedence
+			if tt.extraSpecs.EnableBootDebug != nil {
 				expectedEnableBootDebug = *tt.extraSpecs.EnableBootDebug
-			} else if tt.extraSpecs.CloudConfigSpec.EnableBootDebug != nil {
-				expectedEnableBootDebug = *tt.extraSpecs.CloudConfigSpec.EnableBootDebug
 			}
 			assert.Equal(t, expectedEnableBootDebug, spec.EnableBootDebug, "expected EnableBootDebug to be %t, got %t", expectedEnableBootDebug, spec.EnableBootDebug)
 			
 			expectedDisableUpdates := false // Default for RunnerSpec.DisableUpdates
-			if tt.extraSpecs.CloudConfigSpec.DisableUpdates != nil {
-				expectedDisableUpdates = *tt.extraSpecs.CloudConfigSpec.DisableUpdates
+			if tt.extraSpecs.DisableUpdates != nil {
+				expectedDisableUpdates = *tt.extraSpecs.DisableUpdates
 			}
 			assert.Equal(t, expectedDisableUpdates, spec.DisableUpdates, "expected DisableUpdates to be %t, got %t", expectedDisableUpdates, spec.DisableUpdates)
 		})
