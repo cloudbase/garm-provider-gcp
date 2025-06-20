@@ -7,13 +7,13 @@ toolchain go1.24.2
 require (
 	cloud.google.com/go/compute v1.39.0
 	github.com/BurntSushi/toml v1.5.0
-	github.com/cloudbase/garm-provider-common v0.1.5-0.20250417155201-8ef03502d06e
+	github.com/cloudbase/garm-provider-common v0.1.5
 	github.com/googleapis/gax-go/v2 v2.14.2
 	github.com/invopop/jsonschema v0.13.0
 	github.com/stretchr/testify v1.10.0
 	github.com/xeipuuv/gojsonschema v1.2.0
 	golang.org/x/oauth2 v0.30.0
-	google.golang.org/api v0.237.0
+	google.golang.org/api v0.238.0
 	google.golang.org/protobuf v1.36.6
 )
 
