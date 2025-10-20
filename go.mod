@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.2
 
 require (
-	cloud.google.com/go/compute v1.48.0
+	cloud.google.com/go/compute v1.49.1
 	github.com/BurntSushi/toml v1.5.0
 	github.com/cloudbase/garm-provider-common v0.1.8-0.20251001105909-bbcacae60e7c
 	github.com/googleapis/gax-go/v2 v2.15.0
