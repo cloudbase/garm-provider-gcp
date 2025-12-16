@@ -141,6 +141,10 @@ type extraSpecs struct {
 	SSHKeys         []string                    `json:"ssh_keys,omitempty" jsonschema:"description=A list of SSH keys to be added to the instance. The format is USERNAME:SSH_KEY"`
 	EnableBootDebug *bool                       `json:"enable_boot_debug,omitempty" jsonschema:"description=Enable boot debug on the VM."`
 	DisableUpdates  *bool                       `json:"disable_updates,omitempty" jsonschema:"description=Disable OS updates on boot."`
+	// Shielded VM options
+	EnableSecureBoot          *bool `json:"enable_secure_boot,omitempty" jsonschema:"description=Enable Secure Boot on the VM. Requires a Shielded VM compatible image."`
+	EnableVTPM                *bool `json:"enable_vtpm,omitempty" jsonschema:"description=Enable virtual Trusted Platform Module (vTPM) on the VM."`
+	EnableIntegrityMonitoring *bool `json:"enable_integrity_monitoring,omitempty" jsonschema:"description=Enable integrity monitoring on the VM."`
 	// The Cloudconfig struct from common package
 	cloudconfig.CloudConfigSpec
 }
@@ -197,6 +201,10 @@ type RunnerSpec struct {
 	SSHKeys         string
 	EnableBootDebug bool
 	DisableUpdates  bool
+	// Shielded VM options
+	EnableSecureBoot          bool
+	EnableVTPM                bool
+	EnableIntegrityMonitoring bool
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
@@ -240,6 +248,15 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	}
 	if extraSpecs.DisableUpdates != nil {
 		r.DisableUpdates = *extraSpecs.DisableUpdates
+	}
+	if extraSpecs.EnableSecureBoot != nil {
+		r.EnableSecureBoot = *extraSpecs.EnableSecureBoot
+	}
+	if extraSpecs.EnableVTPM != nil {
+		r.EnableVTPM = *extraSpecs.EnableVTPM
+	}
+	if extraSpecs.EnableIntegrityMonitoring != nil {
+		r.EnableIntegrityMonitoring = *extraSpecs.EnableIntegrityMonitoring
 	}
 }
 
