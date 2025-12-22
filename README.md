@@ -164,6 +164,22 @@ To this end, this provider supports the following extra specs schema:
             "type": "boolean",
             "description": "Enable boot debug on the VM."
         },
+        "disable_updates": {
+            "type": "boolean",
+            "description": "Disable OS updates on boot."
+        },
+        "enable_secure_boot": {
+            "type": "boolean",
+            "desctipyion": "Enable Secure Boot on the VM. Requires a Shielded VM compatible image."
+        },
+        "enable_vtpm": {
+            "type": "boolean",
+            "desctipyion": "Enable virtual Trusted Platform Module (vTPM) on the VM."
+        },
+        "enable_integrity_monitoring": {
+            "type": "boolean",
+            "desctipyion": "Enable integrity monitoring on the VM."
+        },
         "runner_install_template": {
             "type": "string",
             "description": "This option can be used to override the default runner install template. If used, the caller is responsible for the correctness of the template as well as the suitability of the template for the target OS. Use the extra_context extra spec if your template has variables in it that need to be expanded."

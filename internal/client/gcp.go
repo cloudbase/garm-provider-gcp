@@ -173,6 +173,11 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 			Items: spec.NetworkTags,
 		},
 		ServiceAccounts: spec.ServiceAccounts,
+		ShieldedInstanceConfig: &computepb.ShieldedInstanceConfig{
+			EnableSecureBoot:          proto.Bool(spec.EnableSecureBoot),
+			EnableVtpm:                proto.Bool(spec.EnableVTPM),
+			EnableIntegrityMonitoring: proto.Bool(spec.EnableIntegrityMonitoring),
+		},
 	}
 
 	if !g.cfg.ExternalIPAccess {
