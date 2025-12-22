@@ -250,13 +250,13 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 		r.DisableUpdates = *extraSpecs.DisableUpdates
 	}
 	if extraSpecs.EnableSecureBoot {
-		r.EnableSecureBoot = *extraSpecs.EnableSecureBoot
+		r.EnableSecureBoot = extraSpecs.EnableSecureBoot
 	}
 	if extraSpecs.EnableVTPM {
-		r.EnableVTPM = *extraSpecs.EnableVTPM
+		r.EnableVTPM = extraSpecs.EnableVTPM
 	}
 	if extraSpecs.EnableIntegrityMonitoring {
-		r.EnableIntegrityMonitoring = *extraSpecs.EnableIntegrityMonitoring
+		r.EnableIntegrityMonitoring = extraSpecs.EnableIntegrityMonitoring
 	}
 }
 
