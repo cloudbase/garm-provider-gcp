@@ -135,7 +135,7 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 	inst := &computepb.Instance{
 		Name:        proto.String(name),
 		MachineType: proto.String(util.GetMachineType(g.cfg.Zone, spec.BootstrapParams.Flavor)),
-		Disks:       generateBootDisk(spec.DiskSize, spec.BootstrapParams.Image, spec.SourceSnapshot, spec.DiskType, spec.CustomLabels),
+		Disks:       generateBootDisk(spec.DiskSize, spec.BootstrapParams.Image, spec.SourceSnapshot, spec.DiskType, spec.CustomLabels, spec.BootDiskKmsKeyName),
 		DisplayDevice: &computepb.DisplayDevice{
 			EnableDisplay: proto.Bool(spec.DisplayDevice),
 		},
@@ -323,7 +323,7 @@ func selectStartupScript(osType params.OSType) string {
 	}
 }
 
-func generateBootDisk(diskSize int64, image, snapshot string, diskType string, customLabels map[string]string) []*computepb.AttachedDisk {
+func generateBootDisk(diskSize int64, image, snapshot string, diskType string, customLabels map[string]string, kmsKeyName string) []*computepb.AttachedDisk {
 	disk := []*computepb.AttachedDisk{
 		{
 			Boot: proto.Bool(true),
@@ -343,6 +343,13 @@ func generateBootDisk(diskSize int64, image, snapshot string, diskType string, c
 
 	if snapshot != "" {
 		disk[0].InitializeParams.SourceImage = nil
+	}
+
+	// Set CMEK (Customer-Managed Encryption Key) for the boot disk
+	if kmsKeyName != "" {
+		disk[0].DiskEncryptionKey = &computepb.CustomerEncryptionKey{
+			KmsKeyName: proto.String(kmsKeyName),
+		}
 	}
 
 	return disk
