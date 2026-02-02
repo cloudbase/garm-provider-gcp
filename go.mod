@@ -13,7 +13,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/xeipuuv/gojsonschema v1.2.0
 	golang.org/x/oauth2 v0.34.0
-	google.golang.org/api v0.262.0
+	google.golang.org/api v0.264.0
 	google.golang.org/protobuf v1.36.11
 )
 
