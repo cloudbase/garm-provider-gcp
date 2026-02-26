@@ -145,6 +145,8 @@ type extraSpecs struct {
 	EnableSecureBoot          bool `json:"enable_secure_boot,omitempty" jsonschema:"description=Enable Secure Boot on the VM. Requires a Shielded VM compatible image."`
 	EnableVTPM                bool `json:"enable_vtpm,omitempty" jsonschema:"description=Enable virtual Trusted Platform Module (vTPM) on the VM."`
 	EnableIntegrityMonitoring bool `json:"enable_integrity_monitoring,omitempty" jsonschema:"description=Enable integrity monitoring on the VM."`
+	// CMEK (Customer-Managed Encryption Key) for boot disk
+	BootDiskKmsKeyName string `json:"boot_disk_kms_key_name,omitempty" jsonschema:"description=The Cloud KMS key to use for boot disk encryption. Format: projects/{project}/locations/{location}/keyRings/{keyRing}/cryptoKeys/{key}"`
 	// The Cloudconfig struct from common package
 	cloudconfig.CloudConfigSpec
 }
@@ -205,6 +207,8 @@ type RunnerSpec struct {
 	EnableSecureBoot          bool
 	EnableVTPM                bool
 	EnableIntegrityMonitoring bool
+	// CMEK (Customer-Managed Encryption Key) for boot disk
+	BootDiskKmsKeyName string
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
@@ -257,6 +261,9 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	}
 	if extraSpecs.EnableIntegrityMonitoring {
 		r.EnableIntegrityMonitoring = extraSpecs.EnableIntegrityMonitoring
+	}
+	if extraSpecs.BootDiskKmsKeyName != "" {
+		r.BootDiskKmsKeyName = extraSpecs.BootDiskKmsKeyName
 	}
 }
 
