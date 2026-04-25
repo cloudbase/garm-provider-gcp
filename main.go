@@ -54,6 +54,6 @@ func main() {
 		os.Exit(1)
 	}
 	if len(result) > 0 {
-		fmt.Fprint(os.Stdout, result)
+		_, _ = fmt.Fprint(os.Stdout, result)
 	}
 }
