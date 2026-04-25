@@ -111,7 +111,10 @@ func TestNewConfig(t *testing.T) {
 	// Create a temporary file
 	tmpFile, err := os.CreateTemp("", "config-*.toml")
 	require.NoError(t, err, "Failed to create temporary file")
-	defer os.Remove(tmpFile.Name())
+	defer func() {
+		err := os.Remove(tmpFile.Name())
+		require.NoError(t, err, "Failed to remove temporary file")
+	}()
 
 	_, err = tmpFile.WriteString(mockData)
 	require.NoError(t, err, "Failed to write to temporary file")
