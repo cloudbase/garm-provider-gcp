@@ -3,7 +3,7 @@ module github.com/cloudbase/garm-provider-gcp
 go 1.25.0
 
 require (
-	cloud.google.com/go/compute v1.60.0
+	cloud.google.com/go/compute v1.61.0
 	github.com/BurntSushi/toml v1.6.0
 	github.com/cloudbase/garm-provider-common v0.1.9
 	github.com/googleapis/gax-go/v2 v2.22.0
