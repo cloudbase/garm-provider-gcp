@@ -92,6 +92,12 @@ func newExtraSpecsFromBootstrapData(data params.BootstrapInstance) (*extraSpecs,
 }
 
 func (e *extraSpecs) Validate() error {
+	if e.ProvisioningModel != "" && e.ProvisioningModel != "STANDARD" && e.ProvisioningModel != "SPOT" {
+		return fmt.Errorf("provisioning_model must be STANDARD or SPOT")
+	}
+	if e.FallbackToStandard && e.ProvisioningModel != "SPOT" {
+		return fmt.Errorf("fallback_to_standard requires provisioning_model SPOT")
+	}
 	if len(e.CustomLabels) > 61 {
 		return fmt.Errorf("custom labels cannot exceed 61 items")
 	}
@@ -128,19 +134,21 @@ func (e *extraSpecs) Validate() error {
 }
 
 type extraSpecs struct {
-	DiskSize        int64                       `json:"disksize,omitempty" jsonschema:"description=The size of the root disk in GB. Default is 127 GB."`
-	DiskType        string                      `json:"disktype,omitempty" jsonschema:"description=The type of the disk. Default is pd-standard."`
-	DisplayDevice   bool                        `json:"display_device,omitempty" jsonschema:"description=Enable the display device on the VM."`
-	NetworkID       string                      `json:"network_id,omitempty" jsonschema:"description=The name of the network attached to the instance."`
-	SubnetworkID    string                      `json:"subnetwork_id,omitempty" jsonschema:"description=The name of the subnetwork attached to the instance."`
-	NicType         string                      `json:"nic_type,omitempty" jsonschema:"description=The type of the network interface card. Default is VIRTIO_NET."`
-	CustomLabels    map[string]string           `json:"custom_labels,omitempty" jsonschema:"description=Custom labels to apply to the instance. Each label is a key-value pair where both key and value are strings."`
-	NetworkTags     []string                    `json:"network_tags,omitempty" jsonschema:"description=A list of network tags to be attached to the instance"`
-	ServiceAccounts []*computepb.ServiceAccount `json:"service_accounts,omitempty" jsonschema:"description=A list of service accounts to be attached to the instance"`
-	SourceSnapshot  string                      `json:"source_snapshot,omitempty" jsonschema:"description=The source snapshot to create this disk."`
-	SSHKeys         []string                    `json:"ssh_keys,omitempty" jsonschema:"description=A list of SSH keys to be added to the instance. The format is USERNAME:SSH_KEY"`
-	EnableBootDebug *bool                       `json:"enable_boot_debug,omitempty" jsonschema:"description=Enable boot debug on the VM."`
-	DisableUpdates  *bool                       `json:"disable_updates,omitempty" jsonschema:"description=Disable OS updates on boot."`
+	ProvisioningModel  string                      `json:"provisioning_model,omitempty" jsonschema:"description=Compute Engine provisioning model. Supported values are STANDARD and SPOT."`
+	FallbackToStandard bool                        `json:"fallback_to_standard,omitempty" jsonschema:"description=Retry with STANDARD only when SPOT allocation fails because zonal capacity is unavailable."`
+	DiskSize           int64                       `json:"disksize,omitempty" jsonschema:"description=The size of the root disk in GB. Default is 127 GB."`
+	DiskType           string                      `json:"disktype,omitempty" jsonschema:"description=The type of the disk. Default is pd-standard."`
+	DisplayDevice      bool                        `json:"display_device,omitempty" jsonschema:"description=Enable the display device on the VM."`
+	NetworkID          string                      `json:"network_id,omitempty" jsonschema:"description=The name of the network attached to the instance."`
+	SubnetworkID       string                      `json:"subnetwork_id,omitempty" jsonschema:"description=The name of the subnetwork attached to the instance."`
+	NicType            string                      `json:"nic_type,omitempty" jsonschema:"description=The type of the network interface card. Default is VIRTIO_NET."`
+	CustomLabels       map[string]string           `json:"custom_labels,omitempty" jsonschema:"description=Custom labels to apply to the instance. Each label is a key-value pair where both key and value are strings."`
+	NetworkTags        []string                    `json:"network_tags,omitempty" jsonschema:"description=A list of network tags to be attached to the instance"`
+	ServiceAccounts    []*computepb.ServiceAccount `json:"service_accounts,omitempty" jsonschema:"description=A list of service accounts to be attached to the instance"`
+	SourceSnapshot     string                      `json:"source_snapshot,omitempty" jsonschema:"description=The source snapshot to create this disk."`
+	SSHKeys            []string                    `json:"ssh_keys,omitempty" jsonschema:"description=A list of SSH keys to be added to the instance. The format is USERNAME:SSH_KEY"`
+	EnableBootDebug    *bool                       `json:"enable_boot_debug,omitempty" jsonschema:"description=Enable boot debug on the VM."`
+	DisableUpdates     *bool                       `json:"disable_updates,omitempty" jsonschema:"description=Disable OS updates on boot."`
 	// Shielded VM options
 	EnableSecureBoot          bool `json:"enable_secure_boot,omitempty" jsonschema:"description=Enable Secure Boot on the VM. Requires a Shielded VM compatible image."`
 	EnableVTPM                bool `json:"enable_vtpm,omitempty" jsonschema:"description=Enable virtual Trusted Platform Module (vTPM) on the VM."`
@@ -186,23 +194,25 @@ func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapI
 }
 
 type RunnerSpec struct {
-	Zone            string
-	Tools           params.RunnerApplicationDownload
-	BootstrapParams params.BootstrapInstance
-	NetworkID       string
-	SubnetworkID    string
-	ControllerID    string
-	NicType         string
-	DisplayDevice   bool
-	DiskSize        int64
-	DiskType        string
-	CustomLabels    map[string]string
-	NetworkTags     []string
-	ServiceAccounts []*computepb.ServiceAccount
-	SourceSnapshot  string
-	SSHKeys         string
-	EnableBootDebug bool
-	DisableUpdates  bool
+	ProvisioningModel  string
+	FallbackToStandard bool
+	Zone               string
+	Tools              params.RunnerApplicationDownload
+	BootstrapParams    params.BootstrapInstance
+	NetworkID          string
+	SubnetworkID       string
+	ControllerID       string
+	NicType            string
+	DisplayDevice      bool
+	DiskSize           int64
+	DiskType           string
+	CustomLabels       map[string]string
+	NetworkTags        []string
+	ServiceAccounts    []*computepb.ServiceAccount
+	SourceSnapshot     string
+	SSHKeys            string
+	EnableBootDebug    bool
+	DisableUpdates     bool
 	// Shielded VM options
 	EnableSecureBoot          bool
 	EnableVTPM                bool
@@ -212,6 +222,8 @@ type RunnerSpec struct {
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
+	r.ProvisioningModel = extraSpecs.ProvisioningModel
+	r.FallbackToStandard = extraSpecs.FallbackToStandard
 	if extraSpecs.NetworkID != "" {
 		r.NetworkID = extraSpecs.NetworkID
 	}

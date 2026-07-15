@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	compute "cloud.google.com/go/compute/apiv1"
 	"cloud.google.com/go/compute/apiv1/computepb"
@@ -179,6 +180,9 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 			EnableIntegrityMonitoring: proto.Bool(spec.EnableIntegrityMonitoring),
 		},
 	}
+	if spec.ProvisioningModel == "SPOT" {
+		setSpotScheduling(inst)
+	}
 
 	if !g.cfg.ExternalIPAccess {
 		inst.NetworkInterfaces[0].AccessConfigs = nil
@@ -201,16 +205,58 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 		InstanceResource: inst,
 	}
 
-	op, err := g.client.Insert(ctx, insertReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create instance %s: %w", insertReq, err)
+	err = g.insertInstance(ctx, insertReq)
+	if err != nil && spec.ProvisioningModel == "SPOT" && spec.FallbackToStandard && isCapacityError(err) {
+		// Keep fallback deliberately narrow: quota, auth, invalid configuration,
+		// and every other failure must remain visible instead of silently buying
+		// more expensive compute.
+		inst.Scheduling = nil
+		err = g.insertInstance(ctx, insertReq)
 	}
-
-	if err = WaitOp(op, ctx); err != nil {
-		return nil, fmt.Errorf("failed to wait for operation: %w", err)
+	if err != nil {
+		return nil, err
 	}
 
 	return inst, nil
+}
+
+func setSpotScheduling(inst *computepb.Instance) {
+	inst.Scheduling = &computepb.Scheduling{
+		AutomaticRestart:          proto.Bool(false),
+		InstanceTerminationAction: proto.String("DELETE"),
+		OnHostMaintenance:         proto.String("TERMINATE"),
+		ProvisioningModel:         proto.String("SPOT"),
+	}
+}
+
+func (g *GcpCli) insertInstance(ctx context.Context, req *computepb.InsertInstanceRequest) error {
+	op, err := g.client.Insert(ctx, req)
+	if err != nil {
+		return fmt.Errorf("failed to create instance %s: %w", req, err)
+	}
+	if err := WaitOp(op, ctx); err != nil {
+		return fmt.Errorf("failed to wait for operation: %w", err)
+	}
+	return nil
+}
+
+func isCapacityError(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	capacityReasons := []string{
+		"zone_resource_pool_exhausted",
+		"resource_pool_exhausted",
+		"resourcepoolexhausted",
+		"resourcenotready",
+	}
+	for _, reason := range capacityReasons {
+		if strings.Contains(message, reason) {
+			return true
+		}
+	}
+	return false
 }
 
 func (g *GcpCli) GetInstance(ctx context.Context, instanceName string) (*computepb.Instance, error) {

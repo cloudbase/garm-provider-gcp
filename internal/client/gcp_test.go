@@ -17,6 +17,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	compute "cloud.google.com/go/compute/apiv1"
@@ -105,6 +106,90 @@ func TestCreateInstanceLinux(t *testing.T) {
 		assert.Equal(t, *expectedInstance.Metadata.Items[key].Value, *value.Value)
 	}
 	mockClient.AssertExpectations(t)
+}
+
+func TestCreateInstanceSpotScheduling(t *testing.T) {
+	ctx := context.Background()
+	mockClient := new(MockGcpClient)
+	WaitOp = func(op *compute.Operation, ctx context.Context, opts ...gax.CallOption) error { return nil }
+	gcpCli := &GcpCli{
+		cfg:    &config.Config{Zone: "us-central1-a", ProjectId: "my-project", NetworkID: "my-network", SubnetworkID: "my-subnetwork"},
+		client: mockClient,
+	}
+	mockClient.On("Insert", mock.Anything, mock.MatchedBy(func(req *computepb.InsertInstanceRequest) bool {
+		scheduling := req.InstanceResource.GetScheduling()
+		return scheduling.GetProvisioningModel() == "SPOT" && scheduling.GetInstanceTerminationAction() == "DELETE" &&
+			!scheduling.GetAutomaticRestart() && scheduling.GetOnHostMaintenance() == "TERMINATE"
+	}), mock.Anything).Return(&compute.Operation{}, nil).Once()
+	spec.DefaultCloudConfigFunc = func(params.BootstrapInstance, params.RunnerApplicationDownload, string) (string, error) {
+		return "MockUserData", nil
+	}
+	_, err := gcpCli.CreateInstance(ctx, minimalRunnerSpec("SPOT", false))
+	assert.NoError(t, err)
+	mockClient.AssertExpectations(t)
+}
+
+func TestCreateInstanceFallsBackToStandardOnlyForCapacity(t *testing.T) {
+	ctx := context.Background()
+	mockClient := new(MockGcpClient)
+	WaitOp = func(op *compute.Operation, ctx context.Context, opts ...gax.CallOption) error { return nil }
+	gcpCli := &GcpCli{
+		cfg:    &config.Config{Zone: "us-central1-a", ProjectId: "my-project", NetworkID: "my-network", SubnetworkID: "my-subnetwork"},
+		client: mockClient,
+	}
+	mockClient.On("Insert", mock.Anything, mock.MatchedBy(func(req *computepb.InsertInstanceRequest) bool {
+		return req.InstanceResource.GetScheduling().GetProvisioningModel() == "SPOT"
+	}), mock.Anything).Return((*compute.Operation)(nil), errors.New("ZONE_RESOURCE_POOL_EXHAUSTED")).Once()
+	mockClient.On("Insert", mock.Anything, mock.MatchedBy(func(req *computepb.InsertInstanceRequest) bool {
+		return req.InstanceResource.GetScheduling() == nil
+	}), mock.Anything).Return(&compute.Operation{}, nil).Once()
+	spec.DefaultCloudConfigFunc = func(params.BootstrapInstance, params.RunnerApplicationDownload, string) (string, error) {
+		return "MockUserData", nil
+	}
+	_, err := gcpCli.CreateInstance(ctx, minimalRunnerSpec("SPOT", true))
+	assert.NoError(t, err)
+	mockClient.AssertExpectations(t)
+}
+
+func TestCreateInstanceDoesNotFallbackForNonCapacityErrors(t *testing.T) {
+	ctx := context.Background()
+	mockClient := new(MockGcpClient)
+	gcpCli := &GcpCli{
+		cfg:    &config.Config{Zone: "us-central1-a", ProjectId: "my-project", NetworkID: "my-network", SubnetworkID: "my-subnetwork"},
+		client: mockClient,
+	}
+	mockClient.On("Insert", mock.Anything, mock.Anything, mock.Anything).Return((*compute.Operation)(nil), errors.New("QUOTA_EXCEEDED")).Once()
+	spec.DefaultCloudConfigFunc = func(params.BootstrapInstance, params.RunnerApplicationDownload, string) (string, error) {
+		return "MockUserData", nil
+	}
+	_, err := gcpCli.CreateInstance(ctx, minimalRunnerSpec("SPOT", true))
+	assert.ErrorContains(t, err, "QUOTA_EXCEEDED")
+	mockClient.AssertNumberOfCalls(t, "Insert", 1)
+}
+
+func minimalRunnerSpec(provisioningModel string, fallback bool) *spec.RunnerSpec {
+	return &spec.RunnerSpec{
+		ProvisioningModel: provisioningModel, FallbackToStandard: fallback,
+		NetworkID: "my-network", SubnetworkID: "my-subnetwork", NicType: "GVNIC", DiskSize: 100,
+		CustomLabels: map[string]string{"purpose": "ci-runner"},
+		BootstrapParams: params.BootstrapInstance{
+			Name: "garm-instance", Flavor: "t2a-standard-1",
+			Image:  "projects/my-project/global/images/family/ci-runner-2404-arm64",
+			OSType: params.Linux, OSArch: params.Arm64,
+		},
+	}
+}
+
+func TestIsCapacityError(t *testing.T) {
+	for _, test := range []struct {
+		message string
+		want    bool
+	}{
+		{"ZONE_RESOURCE_POOL_EXHAUSTED", true}, {"resourcePoolExhausted", true},
+		{"resourceNotReady", true}, {"QUOTA_EXCEEDED", false}, {"PERMISSION_DENIED", false},
+	} {
+		assert.Equal(t, test.want, isCapacityError(errors.New(test.message)), test.message)
+	}
 }
 
 func TestCreateInstanceWindows(t *testing.T) {
