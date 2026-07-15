@@ -305,12 +305,12 @@ For example:
 ```json
 {
   "capacity_policy": {
-    "zones": ["us-central1-a", "us-central1-b", "us-central1-c"],
+    "zones": ["example-region-a", "example-region-b", "example-region-c"],
     "candidates": [
       {
         "machine_type": "t2a-standard-2",
         "architecture": "arm64",
-        "zones": ["us-central1-a", "us-central1-b"]
+        "zones": ["example-region-a", "example-region-b"]
       },
       {
         "machine_type": "c4a-standard-2",

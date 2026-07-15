@@ -146,7 +146,7 @@ func (g *GcpCli) createCapacityInstance(ctx context.Context, runnerSpec *spec.Ru
 			created, lookupErr := g.findInstanceInZones(lookupCtx, inst.GetName(), attempt.zones)
 			cancelLookup()
 			if lookupErr != nil {
-				return nil, fmt.Errorf("failed to reconcile create error %w: lookup failed: %v", err, lookupErr)
+				return nil, fmt.Errorf("failed to reconcile create error %w: lookup failed: %w", err, lookupErr)
 			}
 			if created != nil {
 				return created, nil

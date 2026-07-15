@@ -206,6 +206,122 @@ func TestClassifyPlacementError(t *testing.T) {
 	}
 }
 
+func TestRegionalWaitOpFailuresUsePlacementClassification(t *testing.T) {
+	tests := []struct {
+		name       string
+		waitErr    error
+		models     []string
+		candidates []spec.CapacityCandidate
+		wantCalls  int
+		wantError  bool
+	}{
+		{
+			name: "capacity advances provisioning model", waitErr: errors.New("ZONE_RESOURCE_POOL_EXHAUSTED"),
+			models:     []string{"SPOT", "STANDARD"},
+			candidates: []spec.CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
+			wantCalls:  2,
+		},
+		{
+			name: "quota advances ranked candidate", waitErr: errors.New("QUOTA_EXCEEDED: N2D_CPUS"),
+			models: []string{"STANDARD"},
+			candidates: []spec.CapacityCandidate{
+				{MachineType: "n2d-standard-4", Architecture: params.Amd64},
+				{MachineType: "n2-standard-4", Architecture: params.Amd64},
+			},
+			wantCalls: 2,
+		},
+		{
+			name: "terminal stops placement", waitErr: errors.New("PERMISSION_DENIED"),
+			models:     []string{"SPOT", "STANDARD"},
+			candidates: []spec.CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
+			wantCalls:  1, wantError: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			gcpCli, mockClient, regional := policyTestClient(t)
+			runnerSpec := capacityRunnerSpec()
+			runnerSpec.CapacityPolicy.ProvisioningModels = test.models
+			runnerSpec.CapacityPolicy.Candidates = test.candidates
+			expectNoExistingPolicyInstance(mockClient, ctx, runnerSpec.CapacityPolicy.Zones...)
+
+			waitCalls := 0
+			WaitOp = func(*compute.Operation, context.Context, ...gax.CallOption) error {
+				waitCalls++
+				if waitCalls == 1 {
+					return test.waitErr
+				}
+				return nil
+			}
+			regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return(&compute.Operation{}, nil).Times(test.wantCalls)
+			mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
+			if !test.wantError {
+				mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return(createdPolicyInstance("us-central1-a"), nil).Once()
+			}
+
+			result, err := gcpCli.createCapacityInstance(ctx, runnerSpec, basePolicyInstance())
+			if test.wantError {
+				require.ErrorIs(t, err, test.waitErr)
+				assert.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, "zones/us-central1-a", result.GetZone())
+			}
+			assert.Equal(t, test.wantCalls, waitCalls)
+			regional.AssertNumberOfCalls(t, "BulkInsert", test.wantCalls)
+		})
+	}
+}
+
+func TestSuccessfulBulkInsertRequiresFollowUpLookup(t *testing.T) {
+	lookupErr := errors.New("lookup unavailable")
+	tests := []struct {
+		name      string
+		lookupErr error
+		wantText  string
+	}{
+		{name: "lookup error", lookupErr: lookupErr, wantText: "failed to resolve created instance"},
+		{name: "instance missing", lookupErr: notFoundError(), wantText: "regional bulk insert completed without instance"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			gcpCli, mockClient, regional := policyTestClient(t)
+			runnerSpec := capacityRunnerSpec()
+			runnerSpec.CapacityPolicy.ProvisioningModels = []string{"STANDARD"}
+			expectNoExistingPolicyInstance(mockClient, ctx, runnerSpec.CapacityPolicy.Zones...)
+			regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return(&compute.Operation{}, nil).Once()
+			mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), test.lookupErr).Once()
+
+			_, err := gcpCli.createCapacityInstance(ctx, runnerSpec, basePolicyInstance())
+			require.ErrorContains(t, err, test.wantText)
+			if test.lookupErr == lookupErr {
+				require.ErrorIs(t, err, lookupErr)
+			}
+			regional.AssertNumberOfCalls(t, "BulkInsert", 1)
+		})
+	}
+}
+
+func TestCreateErrorReconciliationPreservesBothErrors(t *testing.T) {
+	ctx := context.Background()
+	gcpCli, mockClient, regional := policyTestClient(t)
+	createErr := errors.New("PERMISSION_DENIED")
+	lookupErr := errors.New("lookup unavailable")
+	expectNoExistingPolicyInstance(mockClient, ctx, capacityRunnerSpec().CapacityPolicy.Zones...)
+	regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return((*compute.Operation)(nil), createErr).Once()
+	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), lookupErr).Once()
+
+	_, err := gcpCli.createCapacityInstance(ctx, capacityRunnerSpec(), basePolicyInstance())
+	require.ErrorIs(t, err, createErr)
+	require.ErrorIs(t, err, lookupErr)
+	assert.Contains(t, err.Error(), "failed to reconcile create error")
+	assert.Contains(t, err.Error(), "lookup failed")
+}
+
 func TestQuotaAdvancesCandidateWithDistinctLog(t *testing.T) {
 	ctx := context.Background()
 	gcpCli, mockClient, regional := policyTestClient(t)

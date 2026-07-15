@@ -128,7 +128,7 @@ func (p *CapacityPolicy) Validate() error {
 func regionFromZone(zone string) (string, error) {
 	lastDash := strings.LastIndex(zone, "-")
 	if lastDash <= 0 || lastDash == len(zone)-1 || strings.Contains(zone[lastDash+1:], "-") {
-		return "", fmt.Errorf("expected a zone name such as us-central1-a")
+		return "", fmt.Errorf("expected a zone name with a hyphen-delimited suffix")
 	}
 	return zone[:lastDash], nil
 }
