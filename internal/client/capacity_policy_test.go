@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"testing"
@@ -136,6 +137,7 @@ func TestClassifyPlacementError(t *testing.T) {
 		{name: "zonal stockout", err: errors.New("ZONE_RESOURCE_POOL_EXHAUSTED"), class: placementErrorCapacity},
 		{name: "resource not ready", err: errors.New("resourceNotReady"), class: placementErrorCapacity},
 		{name: "quota", err: errors.New("QUOTA_EXCEEDED"), class: placementErrorQuota},
+		{name: "ambiguous capacity timeout", err: fmt.Errorf("ZONE_RESOURCE_POOL_EXHAUSTED: %w", context.DeadlineExceeded), class: placementErrorTerminal},
 		{name: "authentication", err: errors.New("UNAUTHENTICATED"), class: placementErrorTerminal},
 		{name: "permission", err: errors.New("PERMISSION_DENIED"), class: placementErrorTerminal},
 		{name: "invalid machine", err: errors.New("Invalid value for field machineType"), class: placementErrorTerminal},
@@ -273,17 +275,41 @@ func TestAmbiguousCreateErrorDeduplicatesByExactName(t *testing.T) {
 	ctx := context.Background()
 	gcpCli, mockClient, regional := policyTestClient(t)
 	runnerSpec := capacityRunnerSpec()
+	runnerSpec.CapacityPolicy.Zones = []string{"us-central1-a", "us-central1-b"}
 	runnerSpec.CapacityPolicy.Candidates = []spec.CapacityCandidate{
 		{MachineType: "n2d-standard-4", Architecture: params.Amd64},
 		{MachineType: "n2-standard-4", Architecture: params.Amd64},
 	}
-	regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return((*compute.Operation)(nil), errors.New("ZONE_RESOURCE_POOL_EXHAUSTED: context deadline exceeded")).Once()
-	created := createdPolicyInstance("us-central1-a")
-	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return(created, nil).Once()
+	regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return((*compute.Operation)(nil), fmt.Errorf("ZONE_RESOURCE_POOL_EXHAUSTED: %w", context.DeadlineExceeded)).Once()
+	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
+		Project: "example-project", Zone: "us-central1-a", Instance: "garm-instance",
+	}, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
+	created := createdPolicyInstance("us-central1-b")
+	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
+		Project: "example-project", Zone: "us-central1-b", Instance: "garm-instance",
+	}, mock.Anything).Return(created, nil).Once()
 
 	result, err := gcpCli.createCapacityInstance(ctx, runnerSpec, basePolicyInstance())
 	require.NoError(t, err)
 	assert.Equal(t, created, result)
+	regional.AssertNumberOfCalls(t, "BulkInsert", 1)
+}
+
+func TestAmbiguousCreateErrorWithoutInstanceNeverAdvances(t *testing.T) {
+	ctx := context.Background()
+	gcpCli, mockClient, regional := policyTestClient(t)
+	runnerSpec := capacityRunnerSpec()
+	runnerSpec.CapacityPolicy.Candidates = []spec.CapacityCandidate{
+		{MachineType: "n2d-standard-4", Architecture: params.Amd64},
+		{MachineType: "n2-standard-4", Architecture: params.Amd64},
+	}
+	ambiguousErr := fmt.Errorf("ZONE_RESOURCE_POOL_EXHAUSTED: %w", context.DeadlineExceeded)
+	regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return((*compute.Operation)(nil), ambiguousErr).Once()
+	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
+
+	_, err := gcpCli.createCapacityInstance(ctx, runnerSpec, basePolicyInstance())
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Contains(t, err.Error(), "ZONE_RESOURCE_POOL_EXHAUSTED")
 	regional.AssertNumberOfCalls(t, "BulkInsert", 1)
 }
 

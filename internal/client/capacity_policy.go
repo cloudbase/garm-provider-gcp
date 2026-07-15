@@ -274,6 +274,9 @@ const (
 )
 
 func classifyPlacementError(err error) placementErrorClass {
+	if isAmbiguousCreateError(err) {
+		return placementErrorTerminal
+	}
 	if isQuotaError(err) {
 		return placementErrorQuota
 	}
@@ -281,6 +284,30 @@ func classifyPlacementError(err error) placementErrorClass {
 		return placementErrorCapacity
 	}
 	return placementErrorTerminal
+}
+
+func isAmbiguousCreateError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	ambiguousReasons := []string{
+		"context canceled",
+		"context deadline exceeded",
+		"unexpected eof",
+		"connection reset",
+		"transport is closing",
+		"client connection lost",
+	}
+	for _, reason := range ambiguousReasons {
+		if strings.Contains(message, reason) {
+			return true
+		}
+	}
+	return false
 }
 
 func isQuotaError(err error) bool {
