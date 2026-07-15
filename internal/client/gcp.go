@@ -161,7 +161,7 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 		},
 		NetworkInterfaces: []*computepb.NetworkInterface{
 			{
-				Network: proto.String(spec.NetworkID),
+				Network: proto.String(g.cfg.NetworkID),
 				NicType: proto.String(spec.NicType),
 				AccessConfigs: []*computepb.AccessConfig{
 					{
@@ -218,6 +218,9 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 		})
 	}
 	if spec.CapacityPolicy != nil {
+		// Legacy zonal placement has always used the provider-config network.
+		// Regional policies may opt into the existing extra_specs override.
+		inst.NetworkInterfaces[0].Network = proto.String(spec.NetworkID)
 		return g.createCapacityInstance(ctx, spec, inst)
 	}
 

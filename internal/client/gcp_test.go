@@ -110,32 +110,29 @@ func TestCreateInstanceLinux(t *testing.T) {
 	mockClient.AssertExpectations(t)
 }
 
-func TestCreateInstanceUsesExtraSpecsNetwork(t *testing.T) {
+func TestCreateCapacityInstanceUsesExtraSpecsNetwork(t *testing.T) {
 	ctx := context.Background()
-	mockClient := new(MockGcpClient)
-	previousWaitOp := WaitOp
+	gcpCli, mockClient, regional := policyTestClient(t)
 	previousCloudConfig := spec.DefaultCloudConfigFunc
-	WaitOp = func(*compute.Operation, context.Context, ...gax.CallOption) error { return nil }
 	spec.DefaultCloudConfigFunc = func(params.BootstrapInstance, params.RunnerApplicationDownload, string) (string, error) {
 		return "MockUserData", nil
 	}
 	t.Cleanup(func() {
-		WaitOp = previousWaitOp
 		spec.DefaultCloudConfigFunc = previousCloudConfig
 	})
-	gcpCli := &GcpCli{
-		cfg:    &config.Config{Zone: "us-central1-a", ProjectId: "my-project", NetworkID: "configured-network"},
-		client: mockClient,
-	}
-	mockClient.On("Insert", ctx, mock.MatchedBy(func(req *computepb.InsertInstanceRequest) bool {
-		return req.GetInstanceResource().GetNetworkInterfaces()[0].GetNetwork() == "extra-specs-network"
+	gcpCli.cfg.NetworkID = "configured-network"
+	regional.On("BulkInsert", ctx, mock.MatchedBy(func(req *computepb.BulkInsertRegionInstanceRequest) bool {
+		return req.GetBulkInsertInstanceResourceResource().GetInstanceProperties().GetNetworkInterfaces()[0].GetNetwork() == "extra-specs-network"
 	}), mock.Anything).Return(&compute.Operation{}, nil).Once()
-	runnerSpec := minimalRunnerSpec("", false)
+	created := createdPolicyInstance("us-central1-a")
+	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return(created, nil).Once()
+	runnerSpec := capacityRunnerSpec()
 	runnerSpec.NetworkID = "extra-specs-network"
 
-	_, err := gcpCli.CreateInstance(ctx, runnerSpec)
+	result, err := gcpCli.CreateInstance(ctx, runnerSpec)
 	require.NoError(t, err)
-	mockClient.AssertExpectations(t)
+	assert.Equal(t, created, result)
+	regional.AssertExpectations(t)
 }
 
 func TestCreateInstanceSpotScheduling(t *testing.T) {
@@ -190,7 +187,7 @@ func TestCreateInstancePreservesLegacyZonalPlacement(t *testing.T) {
 	}), mock.Anything).Return(&compute.Operation{}, nil).Once()
 
 	runnerSpec := minimalRunnerSpec("", false)
-	runnerSpec.NetworkID = "configured-network"
+	runnerSpec.NetworkID = "extra-specs-network"
 	runnerSpec.SubnetworkID = "configured-subnetwork"
 	created, err := gcpCli.CreateInstance(ctx, runnerSpec)
 	require.NoError(t, err)
