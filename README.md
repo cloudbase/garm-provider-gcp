@@ -126,7 +126,8 @@ To this end, this provider supports the following extra specs schema:
                             "disk_type": {"type": "string", "description": "Optional boot disk type override. The pool disktype is used when omitted."},
                             "disk_size": {"type": "integer", "description": "Optional boot disk size override in GB. Zero uses the pool disksize."}
                         },
-                        "additionalProperties": false
+                        "additionalProperties": false,
+                        "required": ["machine_type", "architecture"]
                     }
                 },
                 "provisioning_models": {
@@ -135,7 +136,8 @@ To this end, this provider supports the following extra specs schema:
                     "items": {"type": "string"}
                 }
             },
-            "additionalProperties": false
+            "additionalProperties": false,
+            "required": ["zones", "candidates", "provisioning_models"]
         },
         "provisioning_model": {
             "type": "string",
@@ -147,7 +149,7 @@ To this end, this provider supports the following extra specs schema:
         },
         "display_device": {
             "type": "boolean",
-            "description": "Enable the display device on the VM."
+            "description": "Enable the display device on a legacy zonal VM. This field cannot be combined with capacity_policy because regional bulk insert does not expose display-device settings."
         },
         "disksize": {
             "type": "integer",
@@ -211,19 +213,30 @@ To this end, this provider supports the following extra specs schema:
         },
         "enable_secure_boot": {
             "type": "boolean",
-            "desctipyion": "Enable Secure Boot on the VM. Requires a Shielded VM compatible image."
+            "description": "Enable Secure Boot on the VM. Requires a Shielded VM compatible image."
         },
         "enable_vtpm": {
             "type": "boolean",
-            "desctipyion": "Enable virtual Trusted Platform Module (vTPM) on the VM."
+            "description": "Enable virtual Trusted Platform Module (vTPM) on the VM."
         },
         "enable_integrity_monitoring": {
             "type": "boolean",
-            "desctipyion": "Enable integrity monitoring on the VM."
+            "description": "Enable integrity monitoring on the VM."
+        },
+        "boot_disk_kms_key_name": {
+            "type": "string",
+            "description": "The Cloud KMS key used to encrypt the boot disk."
         },
         "runner_install_template": {
             "type": "string",
             "description": "This option can be used to override the default runner install template. If used, the caller is responsible for the correctness of the template as well as the suitability of the template for the target OS. Use the extra_context extra spec if your template has variables in it that need to be expanded."
+        },
+        "pre_install_scripts": {
+            "type": "object",
+            "description": "Base64-encoded scripts run in key order before the runner install script.",
+            "additionalProperties": {
+                "type": "string"
+            }
         },
         "extra_context": {
             "type": "object",
@@ -231,6 +244,16 @@ To this end, this provider supports the following extra specs schema:
             "additionalProperties": {
                 "type": "string"
             }
+        }
+    },
+    "$defs": {
+        "ServiceAccount": {
+            "type": "object",
+            "properties": {
+                "email": {"type": "string"},
+                "scopes": {"type": "array", "items": {"type": "string"}}
+            },
+            "additionalProperties": false
         }
     },
     "additionalProperties": false
@@ -273,9 +296,9 @@ Workers in that pool will be created taking into account the specs you set on th
 
 ### Regional capacity policies
 
-Setting `capacity_policy` switches creation from a zonal insert to a regional bulk insert with `ANY_SINGLE_ZONE`. Compute Engine chooses a zone from `zones` and uses the candidate array as a ranked instance flexibility policy. The provider tries provisioning models in the declared order. It advances only after recognized capacity failures; quota exhaustion advances to the next ranked candidate with an explicit log marker. Authentication, permission, malformed configuration, and invalid machine, image, disk, or network errors stop immediately.
+Setting `capacity_policy` switches creation from a zonal insert to a regional bulk insert with `ANY_SINGLE_ZONE`. Compute Engine chooses a zone from `zones` and uses the candidate array as a ranked instance flexibility policy. Every flexibility selection carries its own boot disk, including inherited pool values and any candidate overrides. The provider tries provisioning models in the declared order. It advances only after recognized capacity failures; quota exhaustion advances to the next ranked candidate with the `gcp_capacity_policy_quota_advance` log marker and never advances to a different provisioning model. Authentication, permission, malformed configuration, ambiguous transport failures, and invalid machine, image, disk, or network errors stop immediately.
 
-Every candidate declares `architecture`, and all candidates must use the same architecture as the pool. Candidate `zones` can narrow placement for machine families that are not available in every policy zone. Candidates with the same compatible zone set are submitted together in rank order. Candidate image, disk type, and disk size values override the pool values only for that selection.
+Every candidate declares `architecture`, and all candidates must use the same architecture as the pool. Candidate `zones` can narrow placement for machine families that are not available in every policy zone; they are treated as a set and emitted in the policy's zone order. Consecutive candidates with the same compatible zone set are submitted together in rank order. Candidate image, disk type, and disk size values override the pool values only for that selection.
 
 For example:
 
@@ -302,6 +325,6 @@ For example:
 }
 ```
 
-`capacity_policy` cannot be combined with the legacy `provisioning_model` or `fallback_to_standard` fields. When `capacity_policy` is absent, the configured provider zone, the pool flavor and image, and the legacy provisioning fields retain their existing behavior.
+`capacity_policy` cannot be combined with the legacy `provisioning_model`, `fallback_to_standard`, or `display_device=true` fields. When `capacity_policy` is absent, the configured provider zone, the pool flavor and image, and the legacy provisioning fields retain their existing behavior.
 
-Policy-created instances return provider IDs in `zone/name` form while the Compute Engine instance name remains unchanged. Get and delete accept both zoned IDs and legacy bare names, allowing existing runners to be reaped during migration. After any ambiguous create error, the provider searches every candidate zone for the exact instance name before advancing, so a timed-out response cannot create a second VM. If all eligible candidates fail, the returned error includes the model, machine type, zones, and reason for every attempted candidate.
+Policy-created instances return provider IDs in `zone/name` form while the Compute Engine instance name remains unchanged. Get and delete accept both zoned IDs and legacy bare names, allowing existing runners to be reaped during migration. After any create error, the provider searches every candidate zone for the exact instance name. It returns a found VM; if a timeout, cancellation, or ambiguous transport error has no visible VM, it stops instead of issuing another create. If all eligible candidates fail with classified capacity or quota errors, the returned error includes the model, machine type, zones, and reason for every attempted candidate.

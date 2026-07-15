@@ -148,7 +148,7 @@ type extraSpecs struct {
 	FallbackToStandard bool                        `json:"fallback_to_standard,omitempty" jsonschema:"description=Retry with STANDARD only when SPOT allocation fails because zonal capacity is unavailable."`
 	DiskSize           int64                       `json:"disksize,omitempty" jsonschema:"description=The size of the root disk in GB. Default is 127 GB."`
 	DiskType           string                      `json:"disktype,omitempty" jsonschema:"description=The type of the disk. Default is pd-standard."`
-	DisplayDevice      bool                        `json:"display_device,omitempty" jsonschema:"description=Enable the display device on the VM."`
+	DisplayDevice      bool                        `json:"display_device,omitempty" jsonschema:"description=Enable the display device on a legacy zonal VM. This field cannot be combined with capacity_policy because regional bulk insert does not support it."`
 	NetworkID          string                      `json:"network_id,omitempty" jsonschema:"description=The name of the network attached to the instance."`
 	SubnetworkID       string                      `json:"subnetwork_id,omitempty" jsonschema:"description=The name of the subnetwork attached to the instance."`
 	NicType            string                      `json:"nic_type,omitempty" jsonschema:"description=The type of the network interface card. Default is VIRTIO_NET."`

@@ -83,6 +83,55 @@ func TestJsonSchemaValidation(t *testing.T) {
 			errString: "capacity_policy.candidates: Invalid type. Expected: array, given: string",
 		},
 		{
+			name: "Capacity policy has typed zones",
+			input: json.RawMessage(`{
+				"capacity_policy": {
+					"zones": "us-central1-a",
+					"candidates": [{"machine_type": "n2-standard-4", "architecture": "amd64"}],
+					"provisioning_models": ["STANDARD"]
+				}
+			}`),
+			errString: "Invalid type. Expected: array, given: string",
+		},
+		{
+			name: "Capacity candidate fields are typed",
+			input: json.RawMessage(`{
+				"capacity_policy": {
+					"zones": ["us-central1-a"],
+					"candidates": [{
+						"machine_type": "n2-standard-4",
+						"architecture": true,
+						"zones": "us-central1-a",
+						"image": false,
+						"disk_type": 1,
+						"disk_size": "100"
+					}],
+					"provisioning_models": ["STANDARD"]
+				}
+			}`),
+			errString: "Invalid type",
+		},
+		{
+			name: "Capacity policy rejects nested additional properties",
+			input: json.RawMessage(`{
+				"capacity_policy": {
+					"zones": ["us-central1-a"],
+					"candidates": [{"machine_type": "n2-standard-4", "architecture": "amd64", "priority": 1}],
+					"provisioning_models": ["STANDARD"],
+					"fallback": true
+				}
+			}`),
+			errString: "Additional property",
+		},
+		{
+			name: "Legacy provisioning fields are typed",
+			input: json.RawMessage(`{
+				"provisioning_model": false,
+				"fallback_to_standard": "true"
+			}`),
+			errString: "Invalid type",
+		},
+		{
 			name: "Specs just with disksize",
 			input: json.RawMessage(`{
 				"disksize": 127
@@ -696,6 +745,110 @@ func TestExtraSpecsValidate(t *testing.T) {
 				},
 			},
 			wantErr: true, errMsg: "capacity_policy cannot be combined with display_device",
+		},
+		{
+			name: "Empty policy zones",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}}, ProvisioningModels: []string{"STANDARD"},
+			}},
+			wantErr: true, errMsg: "capacity_policy.zones must not be empty",
+		},
+		{
+			name: "Empty policy candidates",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+			}},
+			wantErr: true, errMsg: "capacity_policy.candidates must not be empty",
+		},
+		{
+			name: "Empty policy models",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a"}, Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
+			}},
+			wantErr: true, errMsg: "capacity_policy.provisioning_models must not be empty",
+		},
+		{
+			name: "Cross-region policy zones",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a", "us-east1-b"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
+			}},
+			wantErr: true, errMsg: "capacity policy zones must belong to one region",
+		},
+		{
+			name: "Duplicate policy zone",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a", "us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
+			}},
+			wantErr: true, errMsg: `duplicate capacity policy zone "us-central1-a"`,
+		},
+		{
+			name: "Unsupported policy model",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"PREEMPTIBLE"},
+				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
+			}},
+			wantErr: true, errMsg: `unsupported capacity policy provisioning model "PREEMPTIBLE"`,
+		},
+		{
+			name: "Duplicate policy model",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"SPOT", "SPOT"},
+				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
+			}},
+			wantErr: true, errMsg: `duplicate capacity policy provisioning model "SPOT"`,
+		},
+		{
+			name: "Missing candidate machine type",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{{Architecture: params.Amd64}},
+			}},
+			wantErr: true, errMsg: "missing machine_type",
+		},
+		{
+			name: "Candidate machine type URL",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{{MachineType: "zones/us-central1-a/machineTypes/n2-standard-4", Architecture: params.Amd64}},
+			}},
+			wantErr: true, errMsg: "machine_type must not be a URL",
+		},
+		{
+			name: "Duplicate candidate machine type",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{
+					{MachineType: "n2-standard-4", Architecture: params.Amd64},
+					{MachineType: "n2-standard-4", Architecture: params.Amd64},
+				},
+			}},
+			wantErr: true, errMsg: `duplicate capacity policy machine type "n2-standard-4"`,
+		},
+		{
+			name: "Unsupported candidate architecture",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.I386}},
+			}},
+			wantErr: true, errMsg: "unsupported architecture",
+		},
+		{
+			name: "Negative candidate disk size",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64, DiskSize: -1}},
+			}},
+			wantErr: true, errMsg: "disk_size must not be negative",
+		},
+		{
+			name: "Duplicate candidate zone",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-a", "us-central1-a"}}},
+			}},
+			wantErr: true, errMsg: `duplicate zone "us-central1-a"`,
 		},
 	}
 
