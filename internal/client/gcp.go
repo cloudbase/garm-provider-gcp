@@ -456,21 +456,23 @@ func generateBootDisk(diskSize int64, image, snapshot string, diskType string, c
 		{
 			Boot: proto.Bool(true),
 			InitializeParams: &computepb.AttachedDiskInitializeParams{
-				DiskSizeGb:     proto.Int64(diskSize),
-				Labels:         customLabels,
-				SourceImage:    proto.String(image),
-				SourceSnapshot: proto.String(snapshot),
+				DiskSizeGb: proto.Int64(diskSize),
+				Labels:     customLabels,
 			},
 			AutoDelete: proto.Bool(true),
 		},
 	}
 
+	if image != "" {
+		disk[0].InitializeParams.SourceImage = proto.String(image)
+	}
 	if diskType != "" {
 		disk[0].InitializeParams.DiskType = proto.String(diskType)
 	}
 
 	if snapshot != "" {
 		disk[0].InitializeParams.SourceImage = nil
+		disk[0].InitializeParams.SourceSnapshot = proto.String(snapshot)
 	}
 
 	// Set CMEK (Customer-Managed Encryption Key) for the boot disk

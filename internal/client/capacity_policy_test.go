@@ -18,6 +18,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -36,6 +37,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -126,6 +128,44 @@ func TestBuildBulkInsertRequest(t *testing.T) {
 	assert.EqualValues(t, 1, secondary.GetRank())
 	assert.Equal(t, runnerSpec.BootstrapParams.Image, secondary.GetDisks()[0].GetInitializeParams().GetSourceImage())
 	assert.Equal(t, runnerSpec.DiskType, secondary.GetDisks()[0].GetInitializeParams().GetDiskType())
+}
+
+func TestBuildBulkInsertRequestMatchesSDKWireShape(t *testing.T) {
+	runnerSpec := capacityRunnerSpec()
+	runnerSpec.CapacityPolicy.Candidates = []spec.CapacityCandidate{{
+		MachineType: "n2d-standard-4", Architecture: params.Amd64,
+		Image: "projects/example/global/images/override", DiskType: "hyperdisk-balanced", DiskSize: 150,
+	}}
+	inst := basePolicyInstance()
+	req, err := buildBulkInsertRequest("example-project", runnerSpec, inst, "SPOT", runnerSpec.CapacityPolicy.Zones, []rankedCandidate{{
+		candidate: runnerSpec.CapacityPolicy.Candidates[0], rank: 0,
+	}})
+	require.NoError(t, err)
+
+	wire, err := (protojson.MarshalOptions{AllowPartial: true}).Marshal(req.GetBulkInsertInstanceResourceResource())
+	require.NoError(t, err)
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(wire, &body))
+	assert.Equal(t, "1", body["count"])
+	assert.Equal(t, "1", body["minCount"])
+	assert.Contains(t, body["perInstanceProperties"], "garm-instance")
+
+	properties := body["instanceProperties"].(map[string]any)
+	assert.NotContains(t, properties, "disks")
+	assert.Equal(t, "SPOT", properties["scheduling"].(map[string]any)["provisioningModel"])
+	assert.Equal(t, "GVNIC", properties["networkInterfaces"].([]any)[0].(map[string]any)["nicType"])
+	assert.Equal(t, "runner@example.invalid", properties["serviceAccounts"].([]any)[0].(map[string]any)["email"])
+
+	policy := body["instanceFlexibilityPolicy"].(map[string]any)
+	selection := policy["instanceSelections"].(map[string]any)["selection-000"].(map[string]any)
+	assert.Equal(t, "0", selection["rank"])
+	assert.Equal(t, []any{"n2d-standard-4"}, selection["machineTypes"])
+	initializeParams := selection["disks"].([]any)[0].(map[string]any)["initializeParams"].(map[string]any)
+	assert.Equal(t, "projects/example/global/images/override", initializeParams["sourceImage"])
+	assert.Equal(t, "hyperdisk-balanced", initializeParams["diskType"])
+	assert.Equal(t, "150", initializeParams["diskSizeGb"])
+	assert.Equal(t, "X86_64", initializeParams["architecture"])
+	assert.NotContains(t, initializeParams, "sourceSnapshot")
 }
 
 func TestClassifyPlacementError(t *testing.T) {
