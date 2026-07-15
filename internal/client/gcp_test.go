@@ -121,6 +121,7 @@ func TestCreateCapacityInstanceUsesExtraSpecsNetwork(t *testing.T) {
 		spec.DefaultCloudConfigFunc = previousCloudConfig
 	})
 	gcpCli.cfg.NetworkID = "configured-network"
+	expectNoExistingPolicyInstance(mockClient, ctx, capacityRunnerSpec().CapacityPolicy.Zones...)
 	regional.On("BulkInsert", ctx, mock.MatchedBy(func(req *computepb.BulkInsertRegionInstanceRequest) bool {
 		return req.GetBulkInsertInstanceResourceResource().GetInstanceProperties().GetNetworkInterfaces()[0].GetNetwork() == "extra-specs-network"
 	}), mock.Anything).Return(&compute.Operation{}, nil).Once()

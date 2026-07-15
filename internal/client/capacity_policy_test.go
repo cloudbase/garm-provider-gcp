@@ -214,6 +214,7 @@ func TestQuotaAdvancesCandidateWithDistinctLog(t *testing.T) {
 		{MachineType: "n2d-standard-4", Architecture: params.Amd64},
 		{MachineType: "n2-standard-4", Architecture: params.Amd64},
 	}
+	expectNoExistingPolicyInstance(mockClient, ctx, runnerSpec.CapacityPolicy.Zones...)
 	quotaErr := errors.New("QUOTA_EXCEEDED: N2D_CPUS")
 	regional.On("BulkInsert", ctx, mock.MatchedBy(func(req *computepb.BulkInsertRegionInstanceRequest) bool {
 		return len(req.GetBulkInsertInstanceResourceResource().GetInstanceFlexibilityPolicy().GetInstanceSelections()) == 2
@@ -246,6 +247,7 @@ func TestCapacityErrorAdvancesProvisioningModel(t *testing.T) {
 	gcpCli, mockClient, regional := policyTestClient(t)
 	runnerSpec := capacityRunnerSpec()
 	runnerSpec.CapacityPolicy.Candidates = []spec.CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}}
+	expectNoExistingPolicyInstance(mockClient, ctx, runnerSpec.CapacityPolicy.Zones...)
 	regional.On("BulkInsert", ctx, mock.MatchedBy(hasProvisioningModel("SPOT")), mock.Anything).Return((*compute.Operation)(nil), errors.New("ZONE_RESOURCE_POOL_EXHAUSTED")).Once()
 	regional.On("BulkInsert", ctx, mock.MatchedBy(hasProvisioningModel("STANDARD")), mock.Anything).Return(&compute.Operation{}, nil).Once()
 	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
@@ -269,6 +271,7 @@ func TestCapacityErrorAdvancesZoneCompatibleCandidate(t *testing.T) {
 		{MachineType: "t2a-standard-2", Architecture: params.Arm64, Zones: []string{"us-central1-a"}},
 		{MachineType: "c4a-standard-2", Architecture: params.Arm64},
 	}
+	expectNoExistingPolicyInstance(mockClient, ctx, runnerSpec.CapacityPolicy.Zones...)
 	regional.On("BulkInsert", ctx, mock.MatchedBy(hasFirstZone("zones/us-central1-a")), mock.Anything).Return((*compute.Operation)(nil), errors.New("ZONE_RESOURCE_POOL_EXHAUSTED: t2a stockout")).Once()
 	regional.On("BulkInsert", ctx, mock.MatchedBy(func(req *computepb.BulkInsertRegionInstanceRequest) bool {
 		zones := req.GetBulkInsertInstanceResourceResource().GetLocationPolicy().GetZones()
@@ -293,6 +296,7 @@ func TestQuotaDoesNotAdvanceProvisioningModel(t *testing.T) {
 	gcpCli, mockClient, regional := policyTestClient(t)
 	runnerSpec := capacityRunnerSpec()
 	runnerSpec.CapacityPolicy.Candidates = []spec.CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}}
+	expectNoExistingPolicyInstance(mockClient, ctx, runnerSpec.CapacityPolicy.Zones...)
 	regional.On("BulkInsert", ctx, mock.MatchedBy(hasProvisioningModel("SPOT")), mock.Anything).Return((*compute.Operation)(nil), errors.New("QUOTA_EXCEEDED")).Once()
 	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
 
@@ -312,6 +316,7 @@ func TestTerminalErrorAggregatesEveryCandidateReason(t *testing.T) {
 		{MachineType: "n2d-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-a"}},
 		{MachineType: "n2-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-b"}},
 	}
+	expectNoExistingPolicyInstance(mockClient, ctx, runnerSpec.CapacityPolicy.Zones...)
 	regional.On("BulkInsert", ctx, mock.MatchedBy(hasFirstZone("zones/us-central1-a")), mock.Anything).Return((*compute.Operation)(nil), errors.New("ZONE_RESOURCE_POOL_EXHAUSTED: n2d stockout")).Once()
 	regional.On("BulkInsert", ctx, mock.MatchedBy(hasFirstZone("zones/us-central1-b")), mock.Anything).Return((*compute.Operation)(nil), errors.New("RESOURCE_POOL_EXHAUSTED: n2 stockout")).Once()
 	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Twice()
@@ -333,12 +338,13 @@ func TestAmbiguousCreateErrorDeduplicatesByExactName(t *testing.T) {
 		{MachineType: "n2d-standard-4", Architecture: params.Amd64},
 		{MachineType: "n2-standard-4", Architecture: params.Amd64},
 	}
+	expectNoExistingPolicyInstance(mockClient, ctx, runnerSpec.CapacityPolicy.Zones...)
 	regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return((*compute.Operation)(nil), fmt.Errorf("ZONE_RESOURCE_POOL_EXHAUSTED: %w", context.DeadlineExceeded)).Once()
-	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
+	mockClient.On("Get", mock.Anything, &computepb.GetInstanceRequest{
 		Project: "example-project", Zone: "us-central1-a", Instance: "garm-instance",
 	}, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
 	created := createdPolicyInstance("us-central1-b")
-	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
+	mockClient.On("Get", mock.Anything, &computepb.GetInstanceRequest{
 		Project: "example-project", Zone: "us-central1-b", Instance: "garm-instance",
 	}, mock.Anything).Return(created, nil).Once()
 
@@ -356,14 +362,62 @@ func TestAmbiguousCreateErrorWithoutInstanceNeverAdvances(t *testing.T) {
 		{MachineType: "n2d-standard-4", Architecture: params.Amd64},
 		{MachineType: "n2-standard-4", Architecture: params.Amd64},
 	}
+	expectNoExistingPolicyInstance(mockClient, ctx, runnerSpec.CapacityPolicy.Zones...)
 	ambiguousErr := fmt.Errorf("ZONE_RESOURCE_POOL_EXHAUSTED: %w", context.DeadlineExceeded)
 	regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return((*compute.Operation)(nil), ambiguousErr).Once()
-	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
+	mockClient.On("Get", mock.Anything, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
 
 	_, err := gcpCli.createCapacityInstance(ctx, runnerSpec, basePolicyInstance())
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	assert.Contains(t, err.Error(), "ZONE_RESOURCE_POOL_EXHAUSTED")
 	regional.AssertNumberOfCalls(t, "BulkInsert", 1)
+}
+
+func TestAmbiguousCreateReconciliationDetachesCanceledContext(t *testing.T) {
+	type contextKey string
+	const traceKey contextKey = "trace"
+
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), traceKey, "preserved"))
+	gcpCli, mockClient, regional := policyTestClient(t)
+	expectNoExistingPolicyInstance(mockClient, ctx, capacityRunnerSpec().CapacityPolicy.Zones...)
+	regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Run(func(mock.Arguments) { cancel() }).Return((*compute.Operation)(nil), context.Canceled).Once()
+	created := createdPolicyInstance("us-central1-a")
+	mockClient.On("Get", mock.MatchedBy(func(lookupCtx context.Context) bool {
+		return lookupCtx.Err() == nil && lookupCtx.Value(traceKey) == "preserved"
+	}), &computepb.GetInstanceRequest{
+		Project: "example-project", Zone: "us-central1-a", Instance: "garm-instance",
+	}, mock.Anything).Return(created, nil).Once()
+
+	result, err := gcpCli.createCapacityInstance(ctx, capacityRunnerSpec(), basePolicyInstance())
+	require.NoError(t, err)
+	assert.Equal(t, created, result)
+	regional.AssertNumberOfCalls(t, "BulkInsert", 1)
+}
+
+func TestExistingCapacityInstanceSkipsBulkInsert(t *testing.T) {
+	ctx := context.Background()
+	gcpCli, mockClient, regional := policyTestClient(t)
+	existing := matchingPolicyInstance("us-central1-a")
+	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
+		Project: "example-project", Zone: "us-central1-a", Instance: "garm-instance",
+	}, mock.Anything).Return(existing, nil).Once()
+
+	result, err := gcpCli.createCapacityInstance(ctx, capacityRunnerSpec(), basePolicyInstance())
+	require.NoError(t, err)
+	assert.Equal(t, existing, result)
+	regional.AssertNotCalled(t, "BulkInsert", mock.Anything, mock.Anything, mock.Anything)
+}
+
+func TestExistingCapacityInstanceWithWrongIdentityFailsClosed(t *testing.T) {
+	ctx := context.Background()
+	gcpCli, mockClient, regional := policyTestClient(t)
+	unrelated := createdPolicyInstance("us-central1-a")
+	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return(unrelated, nil).Once()
+
+	_, err := gcpCli.createCapacityInstance(ctx, capacityRunnerSpec(), basePolicyInstance())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "capacity policy marker is missing")
+	regional.AssertNotCalled(t, "BulkInsert", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestNonCapacityErrorsNeverFallback(t *testing.T) {
@@ -380,6 +434,7 @@ func TestNonCapacityErrorsNeverFallback(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
 			gcpCli, mockClient, regional := policyTestClient(t)
+			expectNoExistingPolicyInstance(mockClient, ctx, capacityRunnerSpec().CapacityPolicy.Zones...)
 			regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return((*compute.Operation)(nil), errors.New(message)).Once()
 			mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
 
@@ -435,6 +490,23 @@ func createdPolicyInstance(zone string) *computepb.Instance {
 	return &computepb.Instance{
 		Name: proto.String("garm-instance"), Zone: proto.String("zones/" + zone), Status: proto.String("RUNNING"),
 		Labels: map[string]string{"ostype": "linux"}, Disks: []*computepb.AttachedDisk{{Architecture: proto.String("amd64")}},
+	}
+}
+
+func matchingPolicyInstance(zone string) *computepb.Instance {
+	instance := createdPolicyInstance(zone)
+	instance.Labels["purpose"] = "runner"
+	instance.Metadata = &computepb.Metadata{Items: []*computepb.Items{{
+		Key: proto.String(util.CapacityPolicyMetadataKey), Value: proto.String("true"),
+	}}}
+	return instance
+}
+
+func expectNoExistingPolicyInstance(mockClient *MockGcpClient, ctx context.Context, zones ...string) {
+	for _, zone := range zones {
+		mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
+			Project: "example-project", Zone: zone, Instance: "garm-instance",
+		}, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
 	}
 }
 

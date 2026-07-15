@@ -23,6 +23,7 @@ import (
 	"log"
 	"slices"
 	"strings"
+	"time"
 
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/cloudbase/garm-provider-common/params"
@@ -32,6 +33,8 @@ import (
 )
 
 const quotaAdvanceLogMarker = "gcp_capacity_policy_quota_advance"
+
+const ambiguousCreateLookupTimeout = 30 * time.Second
 
 type rankedCandidate struct {
 	candidate spec.CapacityCandidate
@@ -89,6 +92,16 @@ func effectiveCandidateZones(policy *spec.CapacityPolicy, candidate spec.Capacit
 
 func (g *GcpCli) createCapacityInstance(ctx context.Context, runnerSpec *spec.RunnerSpec, inst *computepb.Instance) (*computepb.Instance, error) {
 	markCapacityPolicyInstance(inst)
+	existing, err := g.findInstanceInZones(ctx, inst.GetName(), runnerSpec.CapacityPolicy.Zones)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check for an existing regional instance %q: %w", inst.GetName(), err)
+	}
+	if existing != nil {
+		if err := validateCapacityInstanceIdentity(existing, inst); err != nil {
+			return nil, fmt.Errorf("existing regional instance %q does not match this runner: %w", inst.GetName(), err)
+		}
+		return existing, nil
+	}
 	attempts := buildPlacementAttempts(runnerSpec.CapacityPolicy)
 	var failures []candidateFailure
 	modelHadQuota := false
@@ -121,7 +134,17 @@ func (g *GcpCli) createCapacityInstance(ctx context.Context, runnerSpec *spec.Ru
 				return created, nil
 			}
 
-			created, lookupErr := g.findInstanceInZones(ctx, inst.GetName(), attempt.zones)
+			lookupCtx := ctx
+			cancelLookup := func() {}
+			if isAmbiguousCreateError(err) {
+				// A timeout or canceled create context cannot be reused to determine
+				// whether Compute Engine accepted the request. Preserve request values
+				// while detaching cancellation, and bound the reconciliation read so an
+				// uncertain create never advances into a duplicate placement.
+				lookupCtx, cancelLookup = context.WithTimeout(context.WithoutCancel(ctx), ambiguousCreateLookupTimeout)
+			}
+			created, lookupErr := g.findInstanceInZones(lookupCtx, inst.GetName(), attempt.zones)
+			cancelLookup()
 			if lookupErr != nil {
 				return nil, fmt.Errorf("failed to reconcile create error %w: lookup failed: %v", err, lookupErr)
 			}
@@ -148,6 +171,33 @@ func (g *GcpCli) createCapacityInstance(ctx context.Context, runnerSpec *spec.Ru
 	}
 
 	return nil, aggregateCandidateFailures(failures)
+}
+
+func validateCapacityInstanceIdentity(existing, expected *computepb.Instance) error {
+	if existing.GetName() != expected.GetName() {
+		return fmt.Errorf("name is %q, expected %q", existing.GetName(), expected.GetName())
+	}
+	if !hasMetadataValue(existing.Metadata, util.CapacityPolicyMetadataKey, "true") {
+		return fmt.Errorf("capacity policy marker is missing")
+	}
+	for key, value := range expected.Labels {
+		if existing.Labels[key] != value {
+			return fmt.Errorf("label %q is %q, expected %q", key, existing.Labels[key], value)
+		}
+	}
+	return nil
+}
+
+func hasMetadataValue(metadata *computepb.Metadata, key, value string) bool {
+	if metadata == nil {
+		return false
+	}
+	for _, item := range metadata.Items {
+		if item.GetKey() == key && item.GetValue() == value {
+			return true
+		}
+	}
+	return false
 }
 
 func buildBulkInsertRequest(project string, runnerSpec *spec.RunnerSpec, inst *computepb.Instance, model string, zones []string, candidates []rankedCandidate) (*computepb.BulkInsertRegionInstanceRequest, error) {
