@@ -104,6 +104,47 @@ To this end, this provider supports the following extra specs schema:
     "type": "object",
     "description": "Schema defining supported extra specs for the Garm GCP Provider",
     "properties": {
+        "capacity_policy": {
+            "type": "object",
+            "description": "Optional ordered regional capacity policy. When omitted the provider uses the configured zone and pool flavor.",
+            "properties": {
+                "zones": {
+                    "type": "array",
+                    "description": "Ordered Compute Engine zones allowed for regional placement.",
+                    "items": {"type": "string"}
+                },
+                "candidates": {
+                    "type": "array",
+                    "description": "Ordered machine type candidates. Earlier entries have a lower GCE flexibility rank.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "machine_type": {"type": "string", "description": "Compute Engine machine type name without a zone or URL."},
+                            "architecture": {"type": "string", "description": "Runner CPU architecture. Supported values are amd64 and arm64."},
+                            "zones": {"type": "array", "description": "Optional compatible subset of the policy zones. Empty means every policy zone.", "items": {"type": "string"}},
+                            "image": {"type": "string", "description": "Optional source image override. The pool image is used when omitted."},
+                            "disk_type": {"type": "string", "description": "Optional boot disk type override. The pool disktype is used when omitted."},
+                            "disk_size": {"type": "integer", "description": "Optional boot disk size override in GB. Zero uses the pool disksize."}
+                        },
+                        "additionalProperties": false
+                    }
+                },
+                "provisioning_models": {
+                    "type": "array",
+                    "description": "Ordered Compute Engine provisioning models. Supported values are SPOT and STANDARD.",
+                    "items": {"type": "string"}
+                }
+            },
+            "additionalProperties": false
+        },
+        "provisioning_model": {
+            "type": "string",
+            "description": "Compute Engine provisioning model for legacy zonal placement. Supported values are STANDARD and SPOT."
+        },
+        "fallback_to_standard": {
+            "type": "boolean",
+            "description": "Retry a legacy zonal SPOT create as STANDARD only when the SPOT failure is a recognized capacity error."
+        },
         "display_device": {
             "type": "boolean",
             "description": "Enable the display device on the VM."
@@ -229,3 +270,36 @@ garm-cli pool update --extra-specs='{"disksize" : 100}' <POOL_ID>
 You can also set a spec when creating a new pool, using the same flag.
 
 Workers in that pool will be created taking into account the specs you set on the pool.
+
+### Regional capacity policies
+
+Setting `capacity_policy` switches creation from a zonal insert to a regional bulk insert with `ANY_SINGLE_ZONE`. Compute Engine chooses a zone from `zones` and uses the candidate array as a ranked instance flexibility policy. The provider tries provisioning models in the declared order. It advances only after recognized capacity failures; quota exhaustion advances to the next ranked candidate with an explicit log marker. Authentication, permission, malformed configuration, and invalid machine, image, disk, or network errors stop immediately.
+
+Every candidate declares `architecture`, and all candidates must use the same architecture as the pool. Candidate `zones` can narrow placement for machine families that are not available in every policy zone. Candidates with the same compatible zone set are submitted together in rank order. Candidate image, disk type, and disk size values override the pool values only for that selection.
+
+For example:
+
+```json
+{
+  "capacity_policy": {
+    "zones": ["us-central1-a", "us-central1-b", "us-central1-c"],
+    "candidates": [
+      {
+        "machine_type": "t2a-standard-2",
+        "architecture": "arm64",
+        "zones": ["us-central1-a", "us-central1-b"]
+      },
+      {
+        "machine_type": "c4a-standard-2",
+        "architecture": "arm64",
+        "image": "projects/example/global/images/runner-arm64",
+        "disk_type": "hyperdisk-balanced",
+        "disk_size": 150
+      }
+    ],
+    "provisioning_models": ["SPOT", "STANDARD"]
+  }
+}
+```
+
+`capacity_policy` cannot be combined with the legacy `provisioning_model` or `fallback_to_standard` fields. When `capacity_policy` is absent, the configured provider zone, the pool flavor and image, and the legacy provisioning fields retain their existing behavior.

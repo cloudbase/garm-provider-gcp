@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"cloud.google.com/go/compute/apiv1/computepb"
+	"github.com/cloudbase/garm-provider-common/params"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -35,8 +36,14 @@ func TestJsonSchemaValidation(t *testing.T) {
 		{
 			name: "Full specs",
 			input: json.RawMessage(`{
-				"provisioning_model": "SPOT",
-				"fallback_to_standard": true,
+				"capacity_policy": {
+					"zones": ["us-central1-a", "us-central1-b"],
+					"candidates": [
+						{"machine_type": "n2-standard-4", "architecture": "amd64"},
+						{"machine_type": "c2d-standard-4", "architecture": "amd64", "zones": ["us-central1-b"], "image": "projects/example/global/images/runner", "disk_type": "hyperdisk-balanced", "disk_size": 150}
+					],
+					"provisioning_models": ["SPOT", "STANDARD"]
+				},
 				"display_device": true,
 				"disksize": 127,
 				"disktype": "pd-ssd",
@@ -63,6 +70,17 @@ func TestJsonSchemaValidation(t *testing.T) {
 				"display_device": true
 			}`),
 			errString: "",
+		},
+		{
+			name: "Capacity policy has a typed candidate list",
+			input: json.RawMessage(`{
+				"capacity_policy": {
+					"zones": ["us-central1-a"],
+					"candidates": "n2-standard-4",
+					"provisioning_models": ["STANDARD"]
+				}
+			}`),
+			errString: "capacity_policy.candidates: Invalid type. Expected: array, given: string",
 		},
 		{
 			name: "Specs just with disksize",
@@ -515,6 +533,18 @@ func TestRunnerSpec_Validate(t *testing.T) {
 			},
 			errString: fmt.Errorf("missing nic type"),
 		},
+		{
+			name: "CapacityPolicyArchitectureMismatch",
+			spec: &RunnerSpec{
+				Zone: "us-central1-a", NetworkID: "network", SubnetworkID: "subnetwork", ControllerID: "controller", NicType: "GVNIC",
+				BootstrapParams: params.BootstrapInstance{OSArch: params.Amd64},
+				CapacityPolicy: &CapacityPolicy{
+					Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+					Candidates: []CapacityCandidate{{MachineType: "t2a-standard-1", Architecture: params.Arm64}},
+				},
+			},
+			errString: fmt.Errorf("capacity policy architecture \"arm64\" does not match runner architecture \"amd64\""),
+		},
 	}
 
 	for _, tt := range tests {
@@ -528,6 +558,33 @@ func TestRunnerSpec_Validate(t *testing.T) {
 
 		})
 	}
+}
+
+func TestCapacityPolicyParsingPreservesOrder(t *testing.T) {
+	data := params.BootstrapInstance{
+		OSType: params.Linux,
+		OSArch: params.Amd64,
+		ExtraSpecs: json.RawMessage(`{
+			"capacity_policy": {
+				"zones": ["us-central1-b", "us-central1-a"],
+				"candidates": [
+					{"machine_type": "n2d-standard-4", "architecture": "amd64"},
+					{"machine_type": "n2-standard-4", "architecture": "amd64"}
+				],
+				"provisioning_models": ["SPOT", "STANDARD"]
+			}
+		}`),
+	}
+
+	extra, err := newExtraSpecsFromBootstrapData(data)
+	require.NoError(t, err)
+	require.NotNil(t, extra.CapacityPolicy)
+	assert.Equal(t, []string{"us-central1-b", "us-central1-a"}, extra.CapacityPolicy.Zones)
+	assert.Equal(t, []string{"n2d-standard-4", "n2-standard-4"}, []string{
+		extra.CapacityPolicy.Candidates[0].MachineType,
+		extra.CapacityPolicy.Candidates[1].MachineType,
+	})
+	assert.Equal(t, []string{"SPOT", "STANDARD"}, extra.CapacityPolicy.ProvisioningModels)
 }
 
 func TestExtraSpecsValidate(t *testing.T) {
@@ -598,6 +655,36 @@ func TestExtraSpecsValidate(t *testing.T) {
 			name:    "Fallback requires Spot",
 			specs:   &extraSpecs{ProvisioningModel: "STANDARD", FallbackToStandard: true},
 			wantErr: true, errMsg: "fallback_to_standard requires provisioning_model SPOT",
+		},
+		{
+			name: "Mixed capacity architectures",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{
+					{MachineType: "n2-standard-4", Architecture: params.Amd64},
+					{MachineType: "t2a-standard-4", Architecture: params.Arm64},
+				},
+			}},
+			wantErr: true, errMsg: "capacity policy candidates must use one architecture",
+		},
+		{
+			name: "Candidate zone outside policy",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-b"}}},
+			}},
+			wantErr: true, errMsg: "zone \"us-central1-b\" is not allowed by the policy",
+		},
+		{
+			name: "Legacy and capacity fields conflict",
+			specs: &extraSpecs{
+				ProvisioningModel: "SPOT",
+				CapacityPolicy: &CapacityPolicy{
+					Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+					Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
+				},
+			},
+			wantErr: true, errMsg: "capacity_policy cannot be combined",
 		},
 	}
 

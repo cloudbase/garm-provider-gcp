@@ -92,6 +92,12 @@ func newExtraSpecsFromBootstrapData(data params.BootstrapInstance) (*extraSpecs,
 }
 
 func (e *extraSpecs) Validate() error {
+	if e.CapacityPolicy != nil && (e.ProvisioningModel != "" || e.FallbackToStandard) {
+		return fmt.Errorf("capacity_policy cannot be combined with provisioning_model or fallback_to_standard")
+	}
+	if err := e.CapacityPolicy.Validate(); err != nil {
+		return err
+	}
 	if e.ProvisioningModel != "" && e.ProvisioningModel != "STANDARD" && e.ProvisioningModel != "SPOT" {
 		return fmt.Errorf("provisioning_model must be STANDARD or SPOT")
 	}
@@ -134,6 +140,7 @@ func (e *extraSpecs) Validate() error {
 }
 
 type extraSpecs struct {
+	CapacityPolicy     *CapacityPolicy             `json:"capacity_policy,omitempty" jsonschema:"description=Optional ordered regional capacity policy. When omitted the provider uses the configured zone and pool flavor."`
 	ProvisioningModel  string                      `json:"provisioning_model,omitempty" jsonschema:"description=Compute Engine provisioning model. Supported values are STANDARD and SPOT."`
 	FallbackToStandard bool                        `json:"fallback_to_standard,omitempty" jsonschema:"description=Retry with STANDARD only when SPOT allocation fails because zonal capacity is unavailable."`
 	DiskSize           int64                       `json:"disksize,omitempty" jsonschema:"description=The size of the root disk in GB. Default is 127 GB."`
@@ -189,11 +196,15 @@ func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapI
 	}
 
 	spec.MergeExtraSpecs(extraSpecs)
+	if err := spec.Validate(); err != nil {
+		return nil, fmt.Errorf("failed to validate runner spec: %w", err)
+	}
 
 	return spec, nil
 }
 
 type RunnerSpec struct {
+	CapacityPolicy     *CapacityPolicy
 	ProvisioningModel  string
 	FallbackToStandard bool
 	Zone               string
@@ -222,6 +233,7 @@ type RunnerSpec struct {
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
+	r.CapacityPolicy = extraSpecs.CapacityPolicy
 	r.ProvisioningModel = extraSpecs.ProvisioningModel
 	r.FallbackToStandard = extraSpecs.FallbackToStandard
 	if extraSpecs.NetworkID != "" {
@@ -294,6 +306,12 @@ func (r *RunnerSpec) Validate() error {
 	}
 	if r.NicType == "" {
 		return fmt.Errorf("missing nic type")
+	}
+	if err := r.CapacityPolicy.Validate(); err != nil {
+		return err
+	}
+	if r.CapacityPolicy != nil && r.CapacityPolicy.Candidates[0].Architecture != r.BootstrapParams.OSArch {
+		return fmt.Errorf("capacity policy architecture %q does not match runner architecture %q", r.CapacityPolicy.Candidates[0].Architecture, r.BootstrapParams.OSArch)
 	}
 	return nil
 }
