@@ -129,6 +129,15 @@ func TestBuildBulkInsertRequest(t *testing.T) {
 }
 
 func TestClassifyPlacementError(t *testing.T) {
+	structuredQuota, _ := apierror.FromError(&googleapi.Error{
+		Code: 403, Message: "request failed", Errors: []googleapi.ErrorItem{{Reason: "quotaExceeded"}},
+	})
+	structuredCapacity, _ := apierror.FromError(&googleapi.Error{
+		Code: 503, Message: "request failed", Errors: []googleapi.ErrorItem{{Reason: "resourcePoolExhausted"}},
+	})
+	structuredInvalid, _ := apierror.FromError(&googleapi.Error{
+		Code: 400, Message: "invalid image resource_pool_exhausted", Errors: []googleapi.ErrorItem{{Reason: "invalidArgument"}},
+	})
 	tests := []struct {
 		name  string
 		err   error
@@ -137,6 +146,10 @@ func TestClassifyPlacementError(t *testing.T) {
 		{name: "zonal stockout", err: errors.New("ZONE_RESOURCE_POOL_EXHAUSTED"), class: placementErrorCapacity},
 		{name: "resource not ready", err: errors.New("resourceNotReady"), class: placementErrorCapacity},
 		{name: "quota", err: errors.New("QUOTA_EXCEEDED"), class: placementErrorQuota},
+		{name: "quota message", err: errors.New("Quota 'N2_CPUS' exceeded"), class: placementErrorQuota},
+		{name: "structured quota", err: structuredQuota, class: placementErrorQuota},
+		{name: "structured capacity", err: structuredCapacity, class: placementErrorCapacity},
+		{name: "structured invalid overrides message", err: structuredInvalid, class: placementErrorTerminal},
 		{name: "ambiguous capacity timeout", err: fmt.Errorf("ZONE_RESOURCE_POOL_EXHAUSTED: %w", context.DeadlineExceeded), class: placementErrorTerminal},
 		{name: "authentication", err: errors.New("UNAUTHENTICATED"), class: placementErrorTerminal},
 		{name: "permission", err: errors.New("PERMISSION_DENIED"), class: placementErrorTerminal},

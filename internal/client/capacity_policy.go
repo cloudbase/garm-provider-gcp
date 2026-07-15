@@ -311,11 +311,14 @@ func isAmbiguousCreateError(err error) bool {
 }
 
 func isQuotaError(err error) bool {
-	if err == nil {
+	if hasPlacementErrorReason(err, []string{"quotaexceeded"}) {
+		return true
+	}
+	if len(structuredPlacementErrorReasons(err)) > 0 {
 		return false
 	}
 	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "quota_exceeded") || strings.Contains(message, "quotaexceeded")
+	return strings.Contains(message, "quota") && strings.Contains(message, "exceeded")
 }
 
 func aggregateCandidateFailures(failures []candidateFailure) error {

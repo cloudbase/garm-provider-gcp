@@ -17,6 +17,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -28,8 +29,10 @@ import (
 	"github.com/cloudbase/garm-provider-gcp/internal/spec"
 	"github.com/cloudbase/garm-provider-gcp/internal/util"
 	"github.com/googleapis/gax-go/v2"
+	"github.com/googleapis/gax-go/v2/apierror"
 	"golang.org/x/oauth2/google"
 	gcompute "google.golang.org/api/compute/v1"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/proto"
 )
@@ -260,22 +263,53 @@ func (g *GcpCli) insertInstance(ctx context.Context, req *computepb.InsertInstan
 }
 
 func isCapacityError(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
 	capacityReasons := []string{
-		"zone_resource_pool_exhausted",
-		"resource_pool_exhausted",
+		"zoneresourcepoolexhausted",
 		"resourcepoolexhausted",
 		"resourcenotready",
 	}
-	for _, reason := range capacityReasons {
-		if strings.Contains(message, reason) {
-			return true
+	return hasPlacementErrorReason(err, capacityReasons)
+}
+
+func hasPlacementErrorReason(err error, expected []string) bool {
+	if err == nil {
+		return false
+	}
+	signals := structuredPlacementErrorReasons(err)
+	if len(signals) == 0 {
+		signals = []string{err.Error()}
+	}
+	for _, signal := range signals {
+		normalized := normalizePlacementErrorReason(signal)
+		for _, reason := range expected {
+			if strings.Contains(normalized, reason) {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+func structuredPlacementErrorReasons(err error) []string {
+	var reasons []string
+	var apiErr *apierror.APIError
+	if errors.As(err, &apiErr) && apiErr.Reason() != "" {
+		reasons = append(reasons, apiErr.Reason())
+	}
+	var googleErr *googleapi.Error
+	if errors.As(err, &googleErr) {
+		for _, item := range googleErr.Errors {
+			if item.Reason != "" {
+				reasons = append(reasons, item.Reason)
+			}
+		}
+	}
+	return reasons
+}
+
+func normalizePlacementErrorReason(reason string) string {
+	replacer := strings.NewReplacer("_", "", "-", "", " ", "")
+	return replacer.Replace(strings.ToLower(reason))
 }
 
 func (g *GcpCli) GetInstance(ctx context.Context, instanceName string) (*computepb.Instance, error) {
