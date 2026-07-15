@@ -126,9 +126,13 @@ func TestCreateCapacityInstanceReturnsZonePrefixedID(t *testing.T) {
 	gcpProvider.gcpCli.SetClient(mockClient)
 	gcpProvider.gcpCli.SetRegionalClient(regional)
 	regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return(&compute.Operation{}, nil).Once()
+	notFound, _ := apierror.FromError(&googleapi.Error{Code: 404, Message: "not found"})
+	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
+		Project: "example-project", Zone: "us-central1-a", Instance: "garm-instance",
+	}, mock.Anything).Return((*computepb.Instance)(nil), notFound).Once()
 	created := &computepb.Instance{
 		Name: proto.String("garm-instance"), Zone: proto.String("zones/us-central1-a"), Status: proto.String("RUNNING"),
-		Labels: map[string]string{"ostype": "linux"},
+		Labels: map[string]string{"garmpoolid": "pool", "garmcontrollerid": "controller", "ostype": "linux"},
 		Metadata: &computepb.Metadata{Items: []*computepb.Items{
 			{Key: proto.String("runner_name"), Value: proto.String("garm-instance")},
 			{Key: proto.String(util.CapacityPolicyMetadataKey), Value: proto.String("true")},
