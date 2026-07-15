@@ -102,12 +102,16 @@ func GcpInstanceToParamsInstance(gcpInstance *computepb.Instance) (params.Provid
 	if gcpInstance.Name == nil {
 		return params.ProviderInstance{}, fmt.Errorf("instance name is nil")
 	}
+	osArch, err := getOSArch(gcpInstance)
+	if err != nil {
+		return params.ProviderInstance{}, err
+	}
 
 	details := params.ProviderInstance{
 		ProviderID: GetProviderID(gcpInstance),
 		Name:       name,
 		OSType:     params.OSType(gcpInstance.Labels["ostype"]),
-		OSArch:     params.OSArch(*gcpInstance.Disks[0].Architecture),
+		OSArch:     osArch,
 	}
 
 	switch gcpInstance.GetStatus() {
@@ -120,4 +124,18 @@ func GcpInstanceToParamsInstance(gcpInstance *computepb.Instance) (params.Provid
 	}
 
 	return details, nil
+}
+
+func getOSArch(instance *computepb.Instance) (params.OSArch, error) {
+	if len(instance.GetDisks()) == 0 || instance.GetDisks()[0].Architecture == nil {
+		return "", fmt.Errorf("instance boot disk architecture is missing")
+	}
+	switch strings.ToUpper(instance.GetDisks()[0].GetArchitecture()) {
+	case "AMD64", "X86_64":
+		return params.Amd64, nil
+	case "ARM64":
+		return params.Arm64, nil
+	default:
+		return "", fmt.Errorf("unsupported instance boot disk architecture %q", instance.GetDisks()[0].GetArchitecture())
+	}
 }

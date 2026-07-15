@@ -25,6 +25,7 @@ import (
 	"github.com/cloudbase/garm-provider-gcp/internal/util"
 	"github.com/googleapis/gax-go/v2/apierror"
 	"google.golang.org/api/iterator"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -33,7 +34,7 @@ func splitProviderID(providerID string) (zone, name string, zoned bool) {
 	if !zoned || zone == "" || name == "" || strings.Contains(name, "/") {
 		return "", util.GetInstanceName(providerID), false
 	}
-	return zone, util.GetInstanceName(name), true
+	return strings.ToLower(zone), util.GetInstanceName(name), true
 }
 
 func (g *GcpCli) getInstanceInZone(ctx context.Context, zone, name string) (*computepb.Instance, error) {
@@ -140,8 +141,8 @@ func isNotFoundError(err error) bool {
 		return false
 	}
 	var apiErr *apierror.APIError
-	if errors.As(err, &apiErr) && apiErr.HTTPCode() == 404 {
-		return true
+	if errors.As(err, &apiErr) {
+		return apiErr.HTTPCode() == 404 || apiErr.GRPCStatus().Code() == codes.NotFound
 	}
 	message := strings.ToLower(err.Error())
 	return strings.Contains(message, "not found") || strings.Contains(message, "notfound") || strings.Contains(message, "code = 404")

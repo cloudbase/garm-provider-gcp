@@ -23,9 +23,11 @@ import (
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/cloudbase/garm-provider-gcp/config"
 	"github.com/googleapis/gax-go/v2"
+	"github.com/googleapis/gax-go/v2/apierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/protobuf/proto"
 )
@@ -42,6 +44,34 @@ func TestGetInstanceUsesZonePrefixedProviderID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expected, instance)
 	mockClient.AssertExpectations(t)
+}
+
+func TestGetInstanceNormalizesZonePrefixedProviderID(t *testing.T) {
+	ctx := context.Background()
+	gcpCli, mockClient := lookupTestClient()
+	expected := createdPolicyInstance("us-central1-b")
+	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
+		Project: "example-project", Zone: "us-central1-b", Instance: "garm-instance",
+	}, mock.Anything).Return(expected, nil).Once()
+
+	instance, err := gcpCli.GetInstance(ctx, "US-CENTRAL1-B/GARM-INSTANCE")
+	require.NoError(t, err)
+	assert.Equal(t, expected, instance)
+	mockClient.AssertExpectations(t)
+}
+
+func TestGetInstancePreservesPermissionErrorContainingNotFound(t *testing.T) {
+	ctx := context.Background()
+	gcpCli, mockClient := lookupTestClient()
+	permissionErr, _ := apierror.FromError(&googleapi.Error{
+		Code: 403, Message: "resource not found or permission denied",
+	})
+	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), permissionErr).Once()
+
+	_, err := gcpCli.GetInstance(ctx, "garm-instance")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "resource not found or permission denied")
+	mockClient.AssertNotCalled(t, "AggregatedList", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestGetInstanceFallsBackForLegacyBareProviderID(t *testing.T) {

@@ -36,14 +36,14 @@ func TestGcpInstanceToParamsInstance(t *testing.T) {
 			gcpInstance: &computepb.Instance{
 				Name:   proto.String("garm-instance"),
 				Labels: map[string]string{"ostype": "linux"},
-				Disks:  []*computepb.AttachedDisk{{Architecture: proto.String("x86_64")}},
+				Disks:  []*computepb.AttachedDisk{{Architecture: proto.String("X86_64")}},
 				Status: proto.String("RUNNING"),
 			},
 			expected: params.ProviderInstance{
 				ProviderID: "garm-instance",
 				Name:       "garm-instance",
 				OSType:     "linux",
-				OSArch:     "x86_64",
+				OSArch:     params.Amd64,
 				Status:     "running",
 			},
 			errString: "",
@@ -53,7 +53,7 @@ func TestGcpInstanceToParamsInstance(t *testing.T) {
 			gcpInstance: &computepb.Instance{
 				Name:   proto.String("garm-instance"),
 				Labels: map[string]string{"ostype": "linux"},
-				Disks:  []*computepb.AttachedDisk{{Architecture: proto.String("x86_64")}},
+				Disks:  []*computepb.AttachedDisk{{Architecture: proto.String("X86_64")}},
 				Metadata: &computepb.Metadata{
 					Items: []*computepb.Items{
 						{Key: proto.String("runner_name"), Value: proto.String("Garm-Instance")},
@@ -65,7 +65,7 @@ func TestGcpInstanceToParamsInstance(t *testing.T) {
 				ProviderID: "garm-instance",
 				Name:       "Garm-Instance",
 				OSType:     "linux",
-				OSArch:     "x86_64",
+				OSArch:     params.Amd64,
 				Status:     "running",
 			},
 			errString: "",
@@ -75,12 +75,12 @@ func TestGcpInstanceToParamsInstance(t *testing.T) {
 			gcpInstance: &computepb.Instance{
 				Name: proto.String("garm-instance"), Zone: proto.String("https://www.googleapis.com/compute/v1/projects/example/zones/us-central1-b"),
 				Labels:   map[string]string{"ostype": "linux"},
-				Disks:    []*computepb.AttachedDisk{{Architecture: proto.String("arm64")}},
+				Disks:    []*computepb.AttachedDisk{{Architecture: proto.String("ARM64")}},
 				Metadata: &computepb.Metadata{Items: []*computepb.Items{{Key: proto.String(CapacityPolicyMetadataKey), Value: proto.String("true")}}},
 				Status:   proto.String("RUNNING"),
 			},
 			expected: params.ProviderInstance{
-				ProviderID: "us-central1-b/garm-instance", Name: "garm-instance", OSType: "linux", OSArch: "arm64", Status: "running",
+				ProviderID: "us-central1-b/garm-instance", Name: "garm-instance", OSType: "linux", OSArch: params.Arm64, Status: "running",
 			},
 		},
 		{
@@ -103,6 +103,20 @@ func TestGcpInstanceToParamsInstance(t *testing.T) {
 			},
 			expected:  params.ProviderInstance{},
 			errString: "instance name is nil",
+		},
+		{
+			name: "MissingArchitecture",
+			gcpInstance: &computepb.Instance{
+				Name: proto.String("garm-instance"), Disks: []*computepb.AttachedDisk{{}},
+			},
+			expected: params.ProviderInstance{}, errString: "instance boot disk architecture is missing",
+		},
+		{
+			name: "UnsupportedArchitecture",
+			gcpInstance: &computepb.Instance{
+				Name: proto.String("garm-instance"), Disks: []*computepb.AttachedDisk{{Architecture: proto.String("RISCV64")}},
+			},
+			expected: params.ProviderInstance{}, errString: `unsupported instance boot disk architecture "RISCV64"`,
 		},
 	}
 

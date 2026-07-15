@@ -28,7 +28,6 @@ import (
 	"github.com/cloudbase/garm-provider-gcp/internal/spec"
 	"github.com/cloudbase/garm-provider-gcp/internal/util"
 	"github.com/googleapis/gax-go/v2"
-	"github.com/googleapis/gax-go/v2/apierror"
 	"golang.org/x/oauth2/google"
 	gcompute "google.golang.org/api/compute/v1"
 	"google.golang.org/api/option"
@@ -346,8 +345,7 @@ func (g *GcpCli) deleteInstanceInZone(ctx context.Context, zone, instance string
 	op, err := g.client.Delete(ctx, req)
 
 	if err != nil {
-		asApiErr, ok := err.(*apierror.APIError)
-		if ok && asApiErr.HTTPCode() == 404 {
+		if isNotFoundError(err) {
 			return true, nil
 		}
 		return false, fmt.Errorf("unable to delete instance: %w", err)
