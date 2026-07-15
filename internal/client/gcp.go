@@ -42,8 +42,9 @@ const (
 )
 
 var (
-	WaitOp = (*compute.Operation).Wait
-	NextIt = (*compute.InstanceIterator).Next
+	WaitOp           = (*compute.Operation).Wait
+	NextIt           = (*compute.InstanceIterator).Next
+	NextAggregatedIt = (*compute.InstancesScopedListPairIterator).Next
 )
 
 func getHTTPClientOptionFromCredentialsFile(ctx context.Context, credentialsFile string) (option.ClientOption, error) {
@@ -83,9 +84,14 @@ func NewGcpCli(ctx context.Context, cfg *config.Config) (*GcpCli, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error creating compute service: %w", err)
 	}
+	regionClient, err := compute.NewRegionInstancesRESTClient(ctx, authOptions...)
+	if err != nil {
+		return nil, fmt.Errorf("error creating regional compute service: %w", err)
+	}
 	gcpCli := &GcpCli{
-		cfg:    cfg,
-		client: computeClient,
+		cfg:          cfg,
+		client:       computeClient,
+		regionClient: regionClient,
 	}
 
 	return gcpCli, nil
@@ -98,11 +104,17 @@ type ClientInterface interface {
 	Delete(ctx context.Context, req *computepb.DeleteInstanceRequest, opts ...gax.CallOption) (*compute.Operation, error)
 	List(ctx context.Context, req *computepb.ListInstancesRequest, opts ...gax.CallOption) *compute.InstanceIterator
 	Get(ctx context.Context, req *computepb.GetInstanceRequest, opts ...gax.CallOption) (*computepb.Instance, error)
+	AggregatedList(ctx context.Context, req *computepb.AggregatedListInstancesRequest, opts ...gax.CallOption) *compute.InstancesScopedListPairIterator
+}
+
+type RegionalClientInterface interface {
+	BulkInsert(ctx context.Context, req *computepb.BulkInsertRegionInstanceRequest, opts ...gax.CallOption) (*compute.Operation, error)
 }
 
 type GcpCli struct {
-	cfg    *config.Config
-	client ClientInterface
+	cfg          *config.Config
+	client       ClientInterface
+	regionClient RegionalClientInterface
 }
 
 func (g GcpCli) Config() *config.Config {
@@ -115,6 +127,10 @@ func (g GcpCli) Client() ClientInterface {
 
 func (g *GcpCli) SetClient(client ClientInterface) {
 	g.client = client
+}
+
+func (g *GcpCli) SetRegionalClient(client RegionalClientInterface) {
+	g.regionClient = client
 }
 
 func (g *GcpCli) SetConfig(cfg *config.Config) {
@@ -198,6 +214,9 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 			Value: proto.String("googet -noconfirm=true install google-compute-engine-ssh"),
 		})
 	}
+	if spec.CapacityPolicy != nil {
+		return g.createCapacityInstance(ctx, spec, inst)
+	}
 
 	insertReq := &computepb.InsertInstanceRequest{
 		Project:          g.cfg.ProjectId,
@@ -260,46 +279,67 @@ func isCapacityError(err error) bool {
 }
 
 func (g *GcpCli) GetInstance(ctx context.Context, instanceName string) (*computepb.Instance, error) {
-	req := &computepb.GetInstanceRequest{
-		Project:  g.cfg.ProjectId,
-		Zone:     g.cfg.Zone,
-		Instance: util.GetInstanceName(instanceName),
+	zone, name, zoned := splitProviderID(instanceName)
+	if zoned {
+		instance, err := g.getInstanceInZone(ctx, zone, name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get instance: %w", err)
+		}
+		return instance, nil
 	}
 
-	instance, err := g.client.Get(ctx, req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get instance: %v", err)
+	instance, err := g.getInstanceInZone(ctx, g.cfg.Zone, name)
+	if err == nil {
+		return instance, nil
 	}
-
+	if !isNotFoundError(err) {
+		return nil, fmt.Errorf("failed to get instance: %w", err)
+	}
+	instance, lookupErr := g.findInstanceAggregated(ctx, name)
+	if lookupErr != nil {
+		return nil, fmt.Errorf("failed to look up legacy instance ID: %w", lookupErr)
+	}
+	if instance == nil {
+		return nil, fmt.Errorf("failed to get instance: %w", err)
+	}
 	return instance, nil
 }
 
 func (g *GcpCli) ListDescribedInstances(ctx context.Context, poolID string) ([]*computepb.Instance, error) {
-	label := fmt.Sprintf("labels.garmpoolid=%s", poolID)
-	req := &computepb.ListInstancesRequest{
-		Project: g.cfg.ProjectId,
-		Zone:    g.cfg.Zone,
-		Filter:  &label,
-	}
-
-	it := g.client.List(ctx, req)
-	var instances []*computepb.Instance
-	for {
-		instance, _ := NextIt(it)
-		if instance == nil {
-			break
-		}
-		instances = append(instances, instance)
-	}
-
-	return instances, nil
+	return g.listInstancesAggregated(ctx, poolID)
 }
 
 func (g *GcpCli) DeleteInstance(ctx context.Context, instance string) error {
+	zone, name, zoned := splitProviderID(instance)
+	if zoned {
+		_, err := g.deleteInstanceInZone(ctx, zone, name)
+		return err
+	}
+
+	notFound, err := g.deleteInstanceInZone(ctx, g.cfg.Zone, name)
+	if err != nil || !notFound {
+		return err
+	}
+	found, err := g.findInstanceAggregated(ctx, name)
+	if err != nil {
+		return fmt.Errorf("unable to look up legacy instance ID: %w", err)
+	}
+	if found == nil {
+		return nil
+	}
+	zone = util.GetZoneName(found.GetZone())
+	if zone == "" {
+		return fmt.Errorf("unable to determine zone for instance %q", name)
+	}
+	_, err = g.deleteInstanceInZone(ctx, zone, name)
+	return err
+}
+
+func (g *GcpCli) deleteInstanceInZone(ctx context.Context, zone, instance string) (bool, error) {
 	req := &computepb.DeleteInstanceRequest{
 		Instance: util.GetInstanceName(instance),
 		Project:  g.cfg.ProjectId,
-		Zone:     g.cfg.Zone,
+		Zone:     zone,
 	}
 
 	op, err := g.client.Delete(ctx, req)
@@ -307,24 +347,28 @@ func (g *GcpCli) DeleteInstance(ctx context.Context, instance string) error {
 	if err != nil {
 		asApiErr, ok := err.(*apierror.APIError)
 		if ok && asApiErr.HTTPCode() == 404 {
-			// We got a 404 error. The instance is gone.
-			return nil
+			return true, nil
 		}
-		return fmt.Errorf("unable to delete instance: %w", err)
+		return false, fmt.Errorf("unable to delete instance: %w", err)
 	}
 
 	if err = WaitOp(op, ctx); err != nil {
-		return fmt.Errorf("unable to wait for the delete operation: %w", err)
+		return false, fmt.Errorf("unable to wait for the delete operation: %w", err)
 	}
 
-	return nil
+	return false, nil
 }
 
 func (g *GcpCli) StopInstance(ctx context.Context, instance string) error {
+	zone, name, zoned := splitProviderID(instance)
+	if !zoned {
+		zone = g.cfg.Zone
+		name = util.GetInstanceName(instance)
+	}
 	req := &computepb.StopInstanceRequest{
-		Instance: util.GetInstanceName(instance),
+		Instance: name,
 		Project:  g.cfg.ProjectId,
-		Zone:     g.cfg.Zone,
+		Zone:     zone,
 	}
 
 	op, err := g.client.Stop(ctx, req)
@@ -340,10 +384,15 @@ func (g *GcpCli) StopInstance(ctx context.Context, instance string) error {
 }
 
 func (g *GcpCli) StartInstance(ctx context.Context, instance string) error {
+	zone, name, zoned := splitProviderID(instance)
+	if !zoned {
+		zone = g.cfg.Zone
+		name = util.GetInstanceName(instance)
+	}
 	req := &computepb.StartInstanceRequest{
-		Instance: util.GetInstanceName(instance),
+		Instance: name,
 		Project:  g.cfg.ProjectId,
-		Zone:     g.cfg.Zone,
+		Zone:     zone,
 	}
 
 	op, err := g.client.Start(ctx, req)

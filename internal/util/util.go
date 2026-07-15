@@ -23,6 +23,8 @@ import (
 	"github.com/cloudbase/garm-provider-common/params"
 )
 
+const CapacityPolicyMetadataKey = "garm-capacity-policy"
+
 func GetMachineType(zone, flavor string) string {
 	machine := fmt.Sprintf("zones/%s/machineTypes/%s", zone, flavor)
 	return machine
@@ -31,6 +33,41 @@ func GetMachineType(zone, flavor string) string {
 func GetInstanceName(name string) string {
 	lowerName := strings.ToLower(name)
 	return lowerName
+}
+
+func GetZoneName(zone string) string {
+	parts := strings.Split(strings.TrimSuffix(zone, "/"), "/")
+	if len(parts) == 0 {
+		return ""
+	}
+	return parts[len(parts)-1]
+}
+
+func GetProviderID(instance *computepb.Instance) string {
+	if instance == nil {
+		return ""
+	}
+	name := GetInstanceName(instance.GetName())
+	if !hasCapacityPolicyMarker(instance.Metadata) {
+		return name
+	}
+	zone := GetZoneName(instance.GetZone())
+	if zone == "" {
+		return name
+	}
+	return zone + "/" + name
+}
+
+func hasCapacityPolicyMarker(metadata *computepb.Metadata) bool {
+	if metadata == nil {
+		return false
+	}
+	for _, item := range metadata.Items {
+		if item.GetKey() == CapacityPolicyMetadataKey && item.GetValue() == "true" {
+			return true
+		}
+	}
+	return false
 }
 
 func getNameForInstance(instance *computepb.Instance) (string, error) {
@@ -67,7 +104,7 @@ func GcpInstanceToParamsInstance(gcpInstance *computepb.Instance) (params.Provid
 	}
 
 	details := params.ProviderInstance{
-		ProviderID: GetInstanceName(*gcpInstance.Name),
+		ProviderID: GetProviderID(gcpInstance),
 		Name:       name,
 		OSType:     params.OSType(gcpInstance.Labels["ostype"]),
 		OSArch:     params.OSArch(*gcpInstance.Disks[0].Architecture),

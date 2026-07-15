@@ -31,7 +31,9 @@ import (
 	"github.com/googleapis/gax-go/v2/apierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/iterator"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -94,6 +96,65 @@ func TestCreateInstance(t *testing.T) {
 	result, err := gcpProvider.CreateInstance(ctx, bootstrapParams)
 	assert.NoError(t, err)
 	assert.Equal(t, expectedInstance, result)
+}
+
+func TestCreateCapacityInstanceReturnsZonePrefixedID(t *testing.T) {
+	ctx := context.Background()
+	mockClient := new(client.MockGcpClient)
+	regional := new(client.MockRegionalGcpClient)
+	previousToolFetch := spec.DefaultToolFetch
+	previousCloudConfig := spec.DefaultCloudConfigFunc
+	previousWaitOp := client.WaitOp
+	spec.DefaultToolFetch = func(params.OSType, params.OSArch, []params.RunnerApplicationDownload) (params.RunnerApplicationDownload, error) {
+		return params.RunnerApplicationDownload{}, nil
+	}
+	spec.DefaultCloudConfigFunc = func(params.BootstrapInstance, params.RunnerApplicationDownload, string) (string, error) {
+		return "#cloud-config", nil
+	}
+	client.WaitOp = func(*compute.Operation, context.Context, ...gax.CallOption) error { return nil }
+	t.Cleanup(func() {
+		spec.DefaultToolFetch = previousToolFetch
+		spec.DefaultCloudConfigFunc = previousCloudConfig
+		client.WaitOp = previousWaitOp
+	})
+
+	gcpProvider := &GcpProvider{gcpCli: &client.GcpCli{}, controllerID: "controller"}
+	providerConfig := config.Config{
+		Zone: "us-central1-a", ProjectId: "example-project", NetworkID: "network", SubnetworkID: "subnetwork",
+	}
+	gcpProvider.gcpCli.SetConfig(&providerConfig)
+	gcpProvider.gcpCli.SetClient(mockClient)
+	gcpProvider.gcpCli.SetRegionalClient(regional)
+	regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return(&compute.Operation{}, nil).Once()
+	created := &computepb.Instance{
+		Name: proto.String("garm-instance"), Zone: proto.String("zones/us-central1-a"), Status: proto.String("RUNNING"),
+		Labels: map[string]string{"ostype": "linux"},
+		Metadata: &computepb.Metadata{Items: []*computepb.Items{
+			{Key: proto.String("runner_name"), Value: proto.String("garm-instance")},
+			{Key: proto.String(util.CapacityPolicyMetadataKey), Value: proto.String("true")},
+		}},
+		Disks: []*computepb.AttachedDisk{{Architecture: proto.String("amd64")}},
+	}
+	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
+		Project: "example-project", Zone: "us-central1-a", Instance: "garm-instance",
+	}, mock.Anything).Return(created, nil).Once()
+
+	result, err := gcpProvider.CreateInstance(ctx, params.BootstrapInstance{
+		Name: "garm-instance", Flavor: "e2-standard-4", Image: "projects/example/global/images/runner",
+		OSType: params.Linux, OSArch: params.Amd64, PoolID: "pool",
+		ExtraSpecs: json.RawMessage(`{
+			"capacity_policy": {
+				"zones": ["us-central1-a"],
+				"candidates": [{"machine_type": "n2-standard-4", "architecture": "amd64"}],
+				"provisioning_models": ["STANDARD"]
+			}
+		}`),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "us-central1-a/garm-instance", result.ProviderID)
+	assert.Equal(t, "garm-instance", result.Name)
+	regional.AssertExpectations(t)
+	mockClient.AssertExpectations(t)
 }
 
 func TestCreateInstanceError(t *testing.T) {
@@ -285,7 +346,8 @@ func TestListInstances(t *testing.T) {
 				"garmpoolid": poolID,
 				"ostype":     "linux",
 			},
-			Disks: []*computepb.AttachedDisk{{Architecture: proto.String("amd64")}},
+			Metadata: &computepb.Metadata{Items: []*computepb.Items{{Key: proto.String(util.CapacityPolicyMetadataKey), Value: proto.String("true")}}},
+			Disks:    []*computepb.AttachedDisk{{Architecture: proto.String("amd64")}},
 		},
 	}
 	expectedInstances := []params.ProviderInstance{
@@ -311,7 +373,7 @@ func TestListInstances(t *testing.T) {
 			Status:     "stopped",
 		},
 		{
-			ProviderID: "garm-instance-4",
+			ProviderID: "europe-west1-d/garm-instance-4",
 			Name:       "garm-instance-4",
 			OSType:     "linux",
 			OSArch:     "amd64",
@@ -319,20 +381,21 @@ func TestListInstances(t *testing.T) {
 		},
 	}
 
-	it := 0
-	client.NextIt = func(*compute.InstanceIterator) (*computepb.Instance, error) {
-		if it < len(toBeIteratedInstances) {
-			it++
-			return toBeIteratedInstances[it-1], nil
+	iteration := 0
+	previousNextAggregatedIt := client.NextAggregatedIt
+	client.NextAggregatedIt = func(*compute.InstancesScopedListPairIterator) (compute.InstancesScopedListPair, error) {
+		if iteration == 0 {
+			iteration++
+			return compute.InstancesScopedListPair{Key: "zones/europe-west1-d", Value: &computepb.InstancesScopedList{Instances: toBeIteratedInstances}}, nil
 		}
-		return nil, nil
+		return compute.InstancesScopedListPair{}, iterator.Done
 	}
+	t.Cleanup(func() { client.NextAggregatedIt = previousNextAggregatedIt })
 
-	mockClient.On("List", ctx, &computepb.ListInstancesRequest{
+	mockClient.On("AggregatedList", ctx, &computepb.AggregatedListInstancesRequest{
 		Project: gcpProvider.gcpCli.Config().ProjectId,
-		Zone:    gcpProvider.gcpCli.Config().Zone,
 		Filter:  proto.String("labels.garmpoolid=garm-pool"),
-	}, mock.Anything).Return(&compute.InstanceIterator{}, nil)
+	}, mock.Anything).Return(&compute.InstancesScopedListPairIterator{})
 
 	resultInstances, err := gcpProvider.ListInstances(ctx, poolID)
 	assert.NoError(t, err)

@@ -71,6 +71,19 @@ func TestGcpInstanceToParamsInstance(t *testing.T) {
 			errString: "",
 		},
 		{
+			name: "Zone-prefixed provider ID",
+			gcpInstance: &computepb.Instance{
+				Name: proto.String("garm-instance"), Zone: proto.String("https://www.googleapis.com/compute/v1/projects/example/zones/us-central1-b"),
+				Labels:   map[string]string{"ostype": "linux"},
+				Disks:    []*computepb.AttachedDisk{{Architecture: proto.String("arm64")}},
+				Metadata: &computepb.Metadata{Items: []*computepb.Items{{Key: proto.String(CapacityPolicyMetadataKey), Value: proto.String("true")}}},
+				Status:   proto.String("RUNNING"),
+			},
+			expected: params.ProviderInstance{
+				ProviderID: "us-central1-b/garm-instance", Name: "garm-instance", OSType: "linux", OSArch: "arm64", Status: "running",
+			},
+		},
+		{
 			name:        "NilGcpInstance",
 			gcpInstance: nil,
 			expected:    params.ProviderInstance{},

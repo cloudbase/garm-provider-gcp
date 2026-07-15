@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/iterator"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -351,20 +352,21 @@ func TestListDescribedInstances(t *testing.T) {
 			Status: proto.String("RUNNING"),
 		},
 	}
-	it := 0
-	NextIt = func(*compute.InstanceIterator) (*computepb.Instance, error) {
-		if it < len(expectedInstances) {
-			it++
-			return expectedInstances[it-1], nil
+	iteration := 0
+	previousNextAggregatedIt := NextAggregatedIt
+	NextAggregatedIt = func(*compute.InstancesScopedListPairIterator) (compute.InstancesScopedListPair, error) {
+		if iteration == 0 {
+			iteration++
+			return compute.InstancesScopedListPair{Key: "zones/europe-west1-d", Value: &computepb.InstancesScopedList{Instances: expectedInstances}}, nil
 		}
-		return nil, nil
+		return compute.InstancesScopedListPair{}, iterator.Done
 	}
+	t.Cleanup(func() { NextAggregatedIt = previousNextAggregatedIt })
 
-	mockClient.On("List", ctx, &computepb.ListInstancesRequest{
+	mockClient.On("AggregatedList", ctx, &computepb.AggregatedListInstancesRequest{
 		Project: gcpCli.cfg.ProjectId,
-		Zone:    gcpCli.cfg.Zone,
 		Filter:  proto.String("labels.garmpoolid=garm-pool"),
-	}, mock.Anything).Return(&compute.InstanceIterator{}, nil)
+	}, mock.Anything).Return(&compute.InstancesScopedListPairIterator{})
 
 	resultInstances, err := gcpCli.ListDescribedInstances(ctx, poolID)
 	assert.NoError(t, err)
@@ -432,6 +434,12 @@ func TestDeleteInstanceNotFound(t *testing.T) {
 		Zone:     gcpCli.cfg.Zone,
 		Instance: util.GetInstanceName(instanceName),
 	}, mock.Anything).Return(mockOperation, mockErr)
+	mockClient.On("AggregatedList", ctx, mock.AnythingOfType("*computepb.AggregatedListInstancesRequest"), mock.Anything).Return(&compute.InstancesScopedListPairIterator{})
+	previousNextAggregatedIt := NextAggregatedIt
+	NextAggregatedIt = func(*compute.InstancesScopedListPairIterator) (compute.InstancesScopedListPair, error) {
+		return compute.InstancesScopedListPair{}, iterator.Done
+	}
+	t.Cleanup(func() { NextAggregatedIt = previousNextAggregatedIt })
 
 	err := gcpCli.DeleteInstance(ctx, instanceName)
 	assert.NoError(t, err)

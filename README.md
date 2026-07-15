@@ -303,3 +303,5 @@ For example:
 ```
 
 `capacity_policy` cannot be combined with the legacy `provisioning_model` or `fallback_to_standard` fields. When `capacity_policy` is absent, the configured provider zone, the pool flavor and image, and the legacy provisioning fields retain their existing behavior.
+
+Policy-created instances return provider IDs in `zone/name` form while the Compute Engine instance name remains unchanged. Get and delete accept both zoned IDs and legacy bare names, allowing existing runners to be reaped during migration. After any ambiguous create error, the provider searches every candidate zone for the exact instance name before advancing, so a timed-out response cannot create a second VM. If all eligible candidates fail, the returned error includes the model, machine type, zones, and reason for every attempted candidate.

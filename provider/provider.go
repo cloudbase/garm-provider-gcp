@@ -18,6 +18,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	execution "github.com/cloudbase/garm-provider-common/execution/v0.1.0"
 	"github.com/cloudbase/garm-provider-common/params"
@@ -63,7 +64,7 @@ func (g *GcpProvider) CreateInstance(ctx context.Context, bootstrapParams params
 		return params.ProviderInstance{}, fmt.Errorf("error creating instance: %w", err)
 	}
 	instance := params.ProviderInstance{
-		ProviderID: *inst.Name,
+		ProviderID: util.GetProviderID(inst),
 		Name:       spec.BootstrapParams.Name,
 		OSType:     spec.BootstrapParams.OSType,
 		OSArch:     spec.BootstrapParams.OSArch,
@@ -80,6 +81,11 @@ func (g *GcpProvider) GetInstance(ctx context.Context, instance string) (params.
 	instanceParams, err := util.GcpInstanceToParamsInstance(inst)
 	if err != nil {
 		return params.ProviderInstance{}, fmt.Errorf("error converting instance: %w", err)
+	}
+	if strings.Contains(instance, "/") {
+		instanceParams.ProviderID = strings.ToLower(instance)
+	} else {
+		instanceParams.ProviderID = util.GetInstanceName(instance)
 	}
 	return instanceParams, nil
 }
