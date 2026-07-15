@@ -159,6 +159,45 @@ func TestCreateInstanceSpotScheduling(t *testing.T) {
 	mockClient.AssertExpectations(t)
 }
 
+func TestCreateInstancePreservesLegacyZonalPlacement(t *testing.T) {
+	ctx := context.Background()
+	mockClient := new(MockGcpClient)
+	previousWaitOp := WaitOp
+	previousCloudConfig := spec.DefaultCloudConfigFunc
+	WaitOp = func(*compute.Operation, context.Context, ...gax.CallOption) error { return nil }
+	spec.DefaultCloudConfigFunc = func(params.BootstrapInstance, params.RunnerApplicationDownload, string) (string, error) {
+		return "MockUserData", nil
+	}
+	t.Cleanup(func() {
+		WaitOp = previousWaitOp
+		spec.DefaultCloudConfigFunc = previousCloudConfig
+	})
+	gcpCli := &GcpCli{
+		cfg: &config.Config{
+			Zone: "us-central1-f", ProjectId: "my-project", NetworkID: "configured-network",
+			SubnetworkID: "configured-subnetwork", ExternalIPAccess: true,
+		},
+		client: mockClient,
+	}
+	mockClient.On("Insert", ctx, mock.MatchedBy(func(req *computepb.InsertInstanceRequest) bool {
+		instance := req.GetInstanceResource()
+		return req.Project == "my-project" && req.Zone == "us-central1-f" &&
+			instance.GetMachineType() == "zones/us-central1-f/machineTypes/t2a-standard-1" &&
+			instance.GetDisks()[0].GetInitializeParams().GetSourceImage() == "projects/my-project/global/images/family/ci-runner-2404-arm64" &&
+			instance.GetDisks()[0].GetInitializeParams().GetDiskSizeGb() == 100 &&
+			instance.GetNetworkInterfaces()[0].GetNetwork() == "configured-network" &&
+			instance.GetScheduling() == nil
+	}), mock.Anything).Return(&compute.Operation{}, nil).Once()
+
+	runnerSpec := minimalRunnerSpec("", false)
+	runnerSpec.NetworkID = "configured-network"
+	runnerSpec.SubnetworkID = "configured-subnetwork"
+	created, err := gcpCli.CreateInstance(ctx, runnerSpec)
+	require.NoError(t, err)
+	assert.Equal(t, "garm-instance", created.GetName())
+	mockClient.AssertExpectations(t)
+}
+
 func TestCreateInstanceFallsBackToStandardOnlyForCapacity(t *testing.T) {
 	ctx := context.Background()
 	mockClient := new(MockGcpClient)
