@@ -86,6 +86,7 @@ func NewGcpCli(ctx context.Context, cfg *config.Config) (*GcpCli, error) {
 	}
 	regionClient, err := compute.NewRegionInstancesRESTClient(ctx, authOptions...)
 	if err != nil {
+		_ = computeClient.Close()
 		return nil, fmt.Errorf("error creating regional compute service: %w", err)
 	}
 	gcpCli := &GcpCli{
@@ -158,7 +159,7 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 		},
 		NetworkInterfaces: []*computepb.NetworkInterface{
 			{
-				Network: proto.String(g.cfg.NetworkID),
+				Network: proto.String(spec.NetworkID),
 				NicType: proto.String(spec.NicType),
 				AccessConfigs: []*computepb.AccessConfig{
 					{

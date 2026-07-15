@@ -30,6 +30,7 @@ import (
 	"github.com/googleapis/gax-go/v2/apierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/protobuf/proto"
@@ -106,6 +107,34 @@ func TestCreateInstanceLinux(t *testing.T) {
 		assert.Equal(t, *expectedInstance.Metadata.Items[key].Key, *value.Key)
 		assert.Equal(t, *expectedInstance.Metadata.Items[key].Value, *value.Value)
 	}
+	mockClient.AssertExpectations(t)
+}
+
+func TestCreateInstanceUsesExtraSpecsNetwork(t *testing.T) {
+	ctx := context.Background()
+	mockClient := new(MockGcpClient)
+	previousWaitOp := WaitOp
+	previousCloudConfig := spec.DefaultCloudConfigFunc
+	WaitOp = func(*compute.Operation, context.Context, ...gax.CallOption) error { return nil }
+	spec.DefaultCloudConfigFunc = func(params.BootstrapInstance, params.RunnerApplicationDownload, string) (string, error) {
+		return "MockUserData", nil
+	}
+	t.Cleanup(func() {
+		WaitOp = previousWaitOp
+		spec.DefaultCloudConfigFunc = previousCloudConfig
+	})
+	gcpCli := &GcpCli{
+		cfg:    &config.Config{Zone: "us-central1-a", ProjectId: "my-project", NetworkID: "configured-network"},
+		client: mockClient,
+	}
+	mockClient.On("Insert", ctx, mock.MatchedBy(func(req *computepb.InsertInstanceRequest) bool {
+		return req.GetInstanceResource().GetNetworkInterfaces()[0].GetNetwork() == "extra-specs-network"
+	}), mock.Anything).Return(&compute.Operation{}, nil).Once()
+	runnerSpec := minimalRunnerSpec("", false)
+	runnerSpec.NetworkID = "extra-specs-network"
+
+	_, err := gcpCli.CreateInstance(ctx, runnerSpec)
+	require.NoError(t, err)
 	mockClient.AssertExpectations(t)
 }
 

@@ -686,6 +686,17 @@ func TestExtraSpecsValidate(t *testing.T) {
 			},
 			wantErr: true, errMsg: "capacity_policy cannot be combined",
 		},
+		{
+			name: "Display device is unsupported by regional bulk insert",
+			specs: &extraSpecs{
+				DisplayDevice: true,
+				CapacityPolicy: &CapacityPolicy{
+					Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+					Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
+				},
+			},
+			wantErr: true, errMsg: "capacity_policy cannot be combined with display_device",
+		},
 	}
 
 	// Generate 62 keys for the "Too many custom labels" test

@@ -61,6 +61,22 @@ func TestBuildPlacementAttemptsOrderingAndZoneCompatibility(t *testing.T) {
 	assert.Equal(t, []int{1, 2}, candidateRanks(attempts[3].candidates))
 }
 
+func TestBuildPlacementAttemptsTreatsCandidateZonesAsASet(t *testing.T) {
+	policy := &spec.CapacityPolicy{
+		Zones: []string{"us-central1-a", "us-central1-b", "us-central1-c"},
+		Candidates: []spec.CapacityCandidate{
+			{MachineType: "n2d-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-b", "us-central1-a"}},
+			{MachineType: "n2-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-a", "us-central1-b"}},
+		},
+		ProvisioningModels: []string{"STANDARD"},
+	}
+
+	attempts := buildPlacementAttempts(policy)
+	require.Len(t, attempts, 1)
+	assert.Equal(t, []string{"us-central1-a", "us-central1-b"}, attempts[0].zones)
+	assert.Equal(t, []int{0, 1}, candidateRanks(attempts[0].candidates))
+}
+
 func TestBuildBulkInsertRequest(t *testing.T) {
 	runnerSpec := capacityRunnerSpec()
 	runnerSpec.CapacityPolicy.Zones = []string{"us-central1-a", "us-central1-b"}
@@ -88,6 +104,7 @@ func TestBuildBulkInsertRequest(t *testing.T) {
 		resource.GetLocationPolicy().GetZones()[1].GetZone(),
 	})
 	assert.Contains(t, resource.GetPerInstanceProperties(), "garm-instance")
+	assert.Empty(t, resource.GetInstanceProperties().GetDisks(), "candidate disks must live only on flexibility selections")
 	assert.Equal(t, "SPOT", resource.GetInstanceProperties().GetScheduling().GetProvisioningModel())
 	assert.True(t, resource.GetInstanceProperties().GetScheduling().GetPreemptible())
 	assert.Equal(t, "DELETE", resource.GetInstanceProperties().GetScheduling().GetInstanceTerminationAction())
@@ -235,6 +252,7 @@ func TestTerminalErrorAggregatesEveryCandidateReason(t *testing.T) {
 	gcpCli, mockClient, regional := policyTestClient(t)
 	runnerSpec := capacityRunnerSpec()
 	runnerSpec.CapacityPolicy.ProvisioningModels = []string{"SPOT"}
+	runnerSpec.CapacityPolicy.Zones = []string{"us-central1-a", "us-central1-b"}
 	runnerSpec.CapacityPolicy.Candidates = []spec.CapacityCandidate{
 		{MachineType: "n2d-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-a"}},
 		{MachineType: "n2-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-b"}},

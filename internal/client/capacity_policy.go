@@ -71,10 +71,20 @@ func buildPlacementAttempts(policy *spec.CapacityPolicy) []placementAttempt {
 }
 
 func effectiveCandidateZones(policy *spec.CapacityPolicy, candidate spec.CapacityCandidate) []string {
-	if len(candidate.Zones) > 0 {
-		return slices.Clone(candidate.Zones)
+	if len(candidate.Zones) == 0 {
+		return slices.Clone(policy.Zones)
 	}
-	return slices.Clone(policy.Zones)
+
+	// Candidate zones are a compatibility set, not a second placement order.
+	// Keep the policy's zone order so equivalent sets share one flexibility
+	// request and candidate rank remains the only machine preference.
+	zones := make([]string, 0, len(candidate.Zones))
+	for _, zone := range policy.Zones {
+		if slices.Contains(candidate.Zones, zone) {
+			zones = append(zones, zone)
+		}
+	}
+	return zones
 }
 
 func (g *GcpCli) createCapacityInstance(ctx context.Context, runnerSpec *spec.RunnerSpec, inst *computepb.Instance) (*computepb.Instance, error) {
@@ -181,7 +191,6 @@ func buildBulkInsertRequest(project string, runnerSpec *spec.RunnerSpec, inst *c
 	}
 
 	properties := &computepb.InstanceProperties{
-		Disks:                  inst.Disks,
 		Labels:                 inst.Labels,
 		Metadata:               inst.Metadata,
 		NetworkInterfaces:      inst.NetworkInterfaces,

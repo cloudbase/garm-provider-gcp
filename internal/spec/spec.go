@@ -95,6 +95,9 @@ func (e *extraSpecs) Validate() error {
 	if e.CapacityPolicy != nil && (e.ProvisioningModel != "" || e.FallbackToStandard) {
 		return fmt.Errorf("capacity_policy cannot be combined with provisioning_model or fallback_to_standard")
 	}
+	if e.CapacityPolicy != nil && e.DisplayDevice {
+		return fmt.Errorf("capacity_policy cannot be combined with display_device because regional bulk insert does not support it")
+	}
 	if err := e.CapacityPolicy.Validate(); err != nil {
 		return err
 	}
@@ -196,8 +199,12 @@ func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapI
 	}
 
 	spec.MergeExtraSpecs(extraSpecs)
-	if err := spec.Validate(); err != nil {
-		return nil, fmt.Errorf("failed to validate runner spec: %w", err)
+	// Keep legacy pool construction unchanged. Config validation already covers
+	// its required fields; policy pools additionally need architecture checks.
+	if spec.CapacityPolicy != nil {
+		if err := spec.Validate(); err != nil {
+			return nil, fmt.Errorf("failed to validate runner spec: %w", err)
+		}
 	}
 
 	return spec, nil
