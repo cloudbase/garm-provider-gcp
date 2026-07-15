@@ -32,7 +32,7 @@
 - IDs and lifecycle: policy instances use `zone/name`; Get/Delete/Start/Stop accept zoned IDs; legacy bare Get/Delete first use the configured zone and then exact aggregated lookup. Listing emits zoned IDs only for policy-marked instances.
 - Architecture: schema requires each declaration, validation rejects unsupported, mixed, or pool-mismatched architecture, selection disks carry the declared GCE architecture, and GCE output is normalized back to GARM `amd64`/`arm64`.
 - Backward compatibility: without `capacity_policy`, creation remains zonal and uses the configured zone plus pool flavor/image and legacy provisioning fields. Policy-only validation is not applied to legacy construction.
-- Generic implementation: the base-to-HEAD diff contains no environment-specific project ID, repository path, provider pin, bucket, automated-author attribution, or generated-by marker.
+- Generic implementation: the base-to-HEAD diff contains no environment-specific project ID, repository path, provider pin, bucket, automated-author attribution, or automation marker.
 - Branch integrity: local `main`, `origin/main`, and `upstream/main` all remain `cb14121f47281a330e7271079c7a54f625ecfe3b`; work is only on `capacity-policy`.
 
 ### Command evidence
