@@ -186,6 +186,36 @@ func TestCapacityErrorAdvancesProvisioningModel(t *testing.T) {
 	regional.AssertNumberOfCalls(t, "BulkInsert", 2)
 }
 
+func TestCapacityErrorAdvancesZoneCompatibleCandidate(t *testing.T) {
+	ctx := context.Background()
+	gcpCli, mockClient, regional := policyTestClient(t)
+	runnerSpec := capacityRunnerSpec()
+	runnerSpec.BootstrapParams.OSArch = params.Arm64
+	runnerSpec.CapacityPolicy.ProvisioningModels = []string{"STANDARD"}
+	runnerSpec.CapacityPolicy.Zones = []string{"us-central1-a", "us-central1-b"}
+	runnerSpec.CapacityPolicy.Candidates = []spec.CapacityCandidate{
+		{MachineType: "t2a-standard-2", Architecture: params.Arm64, Zones: []string{"us-central1-a"}},
+		{MachineType: "c4a-standard-2", Architecture: params.Arm64},
+	}
+	regional.On("BulkInsert", ctx, mock.MatchedBy(hasFirstZone("zones/us-central1-a")), mock.Anything).Return((*compute.Operation)(nil), errors.New("ZONE_RESOURCE_POOL_EXHAUSTED: t2a stockout")).Once()
+	regional.On("BulkInsert", ctx, mock.MatchedBy(func(req *computepb.BulkInsertRegionInstanceRequest) bool {
+		zones := req.GetBulkInsertInstanceResourceResource().GetLocationPolicy().GetZones()
+		return len(zones) == 2 && zones[1].GetZone() == "zones/us-central1-b"
+	}), mock.Anything).Return(&compute.Operation{}, nil).Once()
+	mockClient.On("Get", ctx, mock.MatchedBy(func(req *computepb.GetInstanceRequest) bool {
+		return req.Zone == "us-central1-a"
+	}), mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Twice()
+	created := createdPolicyInstance("us-central1-b")
+	mockClient.On("Get", ctx, mock.MatchedBy(func(req *computepb.GetInstanceRequest) bool {
+		return req.Zone == "us-central1-b"
+	}), mock.Anything).Return(created, nil).Once()
+
+	result, err := gcpCli.createCapacityInstance(ctx, runnerSpec, basePolicyInstance())
+	require.NoError(t, err)
+	assert.Equal(t, "zones/us-central1-b", result.GetZone())
+	regional.AssertNumberOfCalls(t, "BulkInsert", 2)
+}
+
 func TestQuotaDoesNotAdvanceProvisioningModel(t *testing.T) {
 	ctx := context.Background()
 	gcpCli, mockClient, regional := policyTestClient(t)
