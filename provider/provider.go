@@ -69,6 +69,13 @@ func (g *GcpProvider) CreateInstance(ctx context.Context, bootstrapParams params
 		OSArch:     spec.BootstrapParams.OSArch,
 		Status:     "running",
 	}
+	if spec.RegionalPlacement != nil {
+		providerID, err := util.GetRegionalProviderID(inst)
+		if err != nil {
+			return params.ProviderInstance{}, fmt.Errorf("failed to get regional provider ID: %w", err)
+		}
+		instance.ProviderID = providerID
+	}
 	return instance, nil
 }
 
