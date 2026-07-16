@@ -181,7 +181,7 @@ func TestCreateInstancePreservesLegacyZonalPlacement(t *testing.T) {
 		instance := req.GetInstanceResource()
 		return req.Project == "my-project" && req.Zone == "example-region-f" &&
 			instance.GetMachineType() == "zones/example-region-f/machineTypes/t2a-standard-1" &&
-			instance.GetDisks()[0].GetInitializeParams().GetSourceImage() == "projects/my-project/global/images/family/ci-runner-2404-arm64" &&
+			instance.GetDisks()[0].GetInitializeParams().GetSourceImage() == "projects/my-project/global/images/family/runner-image-arm64" &&
 			instance.GetDisks()[0].GetInitializeParams().GetDiskSizeGb() == 100 &&
 			instance.GetNetworkInterfaces()[0].GetNetwork() == "configured-network" &&
 			instance.GetScheduling() == nil
@@ -238,10 +238,10 @@ func minimalRunnerSpec(provisioningModel string, fallback bool) *spec.RunnerSpec
 	return &spec.RunnerSpec{
 		ProvisioningModel: provisioningModel, FallbackToStandard: fallback,
 		NetworkID: "my-network", SubnetworkID: "my-subnetwork", NicType: "GVNIC", DiskSize: 100,
-		CustomLabels: map[string]string{"purpose": "ci-runner"},
+		CustomLabels: map[string]string{"purpose": "automation-runner"},
 		BootstrapParams: params.BootstrapInstance{
 			Name: "garm-instance", Flavor: "t2a-standard-1",
-			Image:  "projects/my-project/global/images/family/ci-runner-2404-arm64",
+			Image:  "projects/my-project/global/images/family/runner-image-arm64",
 			OSType: params.Linux, OSArch: params.Arm64,
 		},
 	}
