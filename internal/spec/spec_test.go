@@ -37,10 +37,10 @@ func TestJsonSchemaValidation(t *testing.T) {
 			name: "Full specs",
 			input: json.RawMessage(`{
 				"capacity_policy": {
-					"zones": ["us-central1-a", "us-central1-b"],
+					"zones": ["example-region-a", "example-region-b"],
 					"candidates": [
 						{"machine_type": "n2-standard-4", "architecture": "amd64"},
-						{"machine_type": "c2d-standard-4", "architecture": "amd64", "zones": ["us-central1-b"], "image": "projects/example/global/images/runner", "disk_type": "hyperdisk-balanced", "disk_size": 150}
+						{"machine_type": "c2d-standard-4", "architecture": "amd64", "zones": ["example-region-b"], "image": "projects/example/global/images/runner", "disk_type": "hyperdisk-balanced", "disk_size": 150}
 					],
 					"provisioning_models": ["SPOT", "STANDARD"]
 				},
@@ -75,7 +75,7 @@ func TestJsonSchemaValidation(t *testing.T) {
 			name: "Capacity policy has a typed candidate list",
 			input: json.RawMessage(`{
 				"capacity_policy": {
-					"zones": ["us-central1-a"],
+					"zones": ["example-region-a"],
 					"candidates": "n2-standard-4",
 					"provisioning_models": ["STANDARD"]
 				}
@@ -86,7 +86,7 @@ func TestJsonSchemaValidation(t *testing.T) {
 			name: "Capacity policy has typed zones",
 			input: json.RawMessage(`{
 				"capacity_policy": {
-					"zones": "us-central1-a",
+					"zones": "example-region-a",
 					"candidates": [{"machine_type": "n2-standard-4", "architecture": "amd64"}],
 					"provisioning_models": ["STANDARD"]
 				}
@@ -97,11 +97,11 @@ func TestJsonSchemaValidation(t *testing.T) {
 			name: "Capacity candidate fields are typed",
 			input: json.RawMessage(`{
 				"capacity_policy": {
-					"zones": ["us-central1-a"],
+					"zones": ["example-region-a"],
 					"candidates": [{
 						"machine_type": "n2-standard-4",
 						"architecture": true,
-						"zones": "us-central1-a",
+						"zones": "example-region-a",
 						"image": false,
 						"disk_type": 1,
 						"disk_size": "100"
@@ -115,7 +115,7 @@ func TestJsonSchemaValidation(t *testing.T) {
 			name: "Capacity policy rejects nested additional properties",
 			input: json.RawMessage(`{
 				"capacity_policy": {
-					"zones": ["us-central1-a"],
+					"zones": ["example-region-a"],
 					"candidates": [{"machine_type": "n2-standard-4", "architecture": "amd64", "priority": 1}],
 					"provisioning_models": ["STANDARD"],
 					"fallback": true
@@ -585,10 +585,10 @@ func TestRunnerSpec_Validate(t *testing.T) {
 		{
 			name: "CapacityPolicyArchitectureMismatch",
 			spec: &RunnerSpec{
-				Zone: "us-central1-a", NetworkID: "network", SubnetworkID: "subnetwork", ControllerID: "controller", NicType: "GVNIC",
+				Zone: "example-region-a", NetworkID: "network", SubnetworkID: "subnetwork", ControllerID: "controller", NicType: "GVNIC",
 				BootstrapParams: params.BootstrapInstance{OSArch: params.Amd64},
 				CapacityPolicy: &CapacityPolicy{
-					Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+					Zones: []string{"example-region-a"}, ProvisioningModels: []string{"STANDARD"},
 					Candidates: []CapacityCandidate{{MachineType: "t2a-standard-1", Architecture: params.Arm64}},
 				},
 			},
@@ -615,7 +615,7 @@ func TestCapacityPolicyParsingPreservesOrder(t *testing.T) {
 		OSArch: params.Amd64,
 		ExtraSpecs: json.RawMessage(`{
 			"capacity_policy": {
-				"zones": ["us-central1-b", "us-central1-a"],
+				"zones": ["example-region-b", "example-region-a"],
 				"candidates": [
 					{"machine_type": "n2d-standard-4", "architecture": "amd64"},
 					{"machine_type": "n2-standard-4", "architecture": "amd64"}
@@ -628,7 +628,7 @@ func TestCapacityPolicyParsingPreservesOrder(t *testing.T) {
 	extra, err := newExtraSpecsFromBootstrapData(data)
 	require.NoError(t, err)
 	require.NotNil(t, extra.CapacityPolicy)
-	assert.Equal(t, []string{"us-central1-b", "us-central1-a"}, extra.CapacityPolicy.Zones)
+	assert.Equal(t, []string{"example-region-b", "example-region-a"}, extra.CapacityPolicy.Zones)
 	assert.Equal(t, []string{"n2d-standard-4", "n2-standard-4"}, []string{
 		extra.CapacityPolicy.Candidates[0].MachineType,
 		extra.CapacityPolicy.Candidates[1].MachineType,
@@ -708,7 +708,7 @@ func TestExtraSpecsValidate(t *testing.T) {
 		{
 			name: "Mixed capacity architectures",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Zones: []string{"example-region-a"}, ProvisioningModels: []string{"STANDARD"},
 				Candidates: []CapacityCandidate{
 					{MachineType: "n2-standard-4", Architecture: params.Amd64},
 					{MachineType: "t2a-standard-4", Architecture: params.Arm64},
@@ -719,17 +719,17 @@ func TestExtraSpecsValidate(t *testing.T) {
 		{
 			name: "Candidate zone outside policy",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
-				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-b"}}},
+				Zones: []string{"example-region-a"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64, Zones: []string{"example-region-b"}}},
 			}},
-			wantErr: true, errMsg: "zone \"us-central1-b\" is not allowed by the policy",
+			wantErr: true, errMsg: "zone \"example-region-b\" is not allowed by the policy",
 		},
 		{
 			name: "Legacy and capacity fields conflict",
 			specs: &extraSpecs{
 				ProvisioningModel: "SPOT",
 				CapacityPolicy: &CapacityPolicy{
-					Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+					Zones: []string{"example-region-a"}, ProvisioningModels: []string{"STANDARD"},
 					Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
 				},
 			},
@@ -740,7 +740,7 @@ func TestExtraSpecsValidate(t *testing.T) {
 			specs: &extraSpecs{
 				DisplayDevice: true,
 				CapacityPolicy: &CapacityPolicy{
-					Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+					Zones: []string{"example-region-a"}, ProvisioningModels: []string{"STANDARD"},
 					Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
 				},
 			},
@@ -756,21 +756,29 @@ func TestExtraSpecsValidate(t *testing.T) {
 		{
 			name: "Empty policy candidates",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Zones: []string{"example-region-a"}, ProvisioningModels: []string{"STANDARD"},
 			}},
 			wantErr: true, errMsg: "capacity_policy.candidates must not be empty",
 		},
 		{
 			name: "Empty policy models",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a"}, Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
+				Zones: []string{"example-region-a"}, Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
 			}},
 			wantErr: true, errMsg: "capacity_policy.provisioning_models must not be empty",
 		},
 		{
+			name: "Malformed policy zone",
+			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
+				Zones: []string{"malformed-zone-name-"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
+			}},
+			wantErr: true, errMsg: `invalid capacity policy zone "malformed-zone-name-": expected a zone name with a hyphen-delimited suffix`,
+		},
+		{
 			name: "Cross-region policy zones",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a", "us-east1-b"}, ProvisioningModels: []string{"STANDARD"},
+				Zones: []string{"example-region-a", "other-region-b"}, ProvisioningModels: []string{"STANDARD"},
 				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
 			}},
 			wantErr: true, errMsg: "capacity policy zones must belong to one region",
@@ -778,15 +786,15 @@ func TestExtraSpecsValidate(t *testing.T) {
 		{
 			name: "Duplicate policy zone",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a", "us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Zones: []string{"example-region-a", "example-region-a"}, ProvisioningModels: []string{"STANDARD"},
 				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
 			}},
-			wantErr: true, errMsg: `duplicate capacity policy zone "us-central1-a"`,
+			wantErr: true, errMsg: `duplicate capacity policy zone "example-region-a"`,
 		},
 		{
 			name: "Unsupported policy model",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"PREEMPTIBLE"},
+				Zones: []string{"example-region-a"}, ProvisioningModels: []string{"PREEMPTIBLE"},
 				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
 			}},
 			wantErr: true, errMsg: `unsupported capacity policy provisioning model "PREEMPTIBLE"`,
@@ -794,7 +802,7 @@ func TestExtraSpecsValidate(t *testing.T) {
 		{
 			name: "Duplicate policy model",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"SPOT", "SPOT"},
+				Zones: []string{"example-region-a"}, ProvisioningModels: []string{"SPOT", "SPOT"},
 				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64}},
 			}},
 			wantErr: true, errMsg: `duplicate capacity policy provisioning model "SPOT"`,
@@ -802,7 +810,7 @@ func TestExtraSpecsValidate(t *testing.T) {
 		{
 			name: "Missing candidate machine type",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Zones: []string{"example-region-a"}, ProvisioningModels: []string{"STANDARD"},
 				Candidates: []CapacityCandidate{{Architecture: params.Amd64}},
 			}},
 			wantErr: true, errMsg: "missing machine_type",
@@ -810,15 +818,15 @@ func TestExtraSpecsValidate(t *testing.T) {
 		{
 			name: "Candidate machine type URL",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
-				Candidates: []CapacityCandidate{{MachineType: "zones/us-central1-a/machineTypes/n2-standard-4", Architecture: params.Amd64}},
+				Zones: []string{"example-region-a"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{{MachineType: "zones/example-region-a/machineTypes/n2-standard-4", Architecture: params.Amd64}},
 			}},
 			wantErr: true, errMsg: "machine_type must not be a URL",
 		},
 		{
 			name: "Duplicate candidate machine type",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Zones: []string{"example-region-a"}, ProvisioningModels: []string{"STANDARD"},
 				Candidates: []CapacityCandidate{
 					{MachineType: "n2-standard-4", Architecture: params.Amd64},
 					{MachineType: "n2-standard-4", Architecture: params.Amd64},
@@ -829,7 +837,7 @@ func TestExtraSpecsValidate(t *testing.T) {
 		{
 			name: "Unsupported candidate architecture",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Zones: []string{"example-region-a"}, ProvisioningModels: []string{"STANDARD"},
 				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.I386}},
 			}},
 			wantErr: true, errMsg: "unsupported architecture",
@@ -837,7 +845,7 @@ func TestExtraSpecsValidate(t *testing.T) {
 		{
 			name: "Negative candidate disk size",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
+				Zones: []string{"example-region-a"}, ProvisioningModels: []string{"STANDARD"},
 				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64, DiskSize: -1}},
 			}},
 			wantErr: true, errMsg: "disk_size must not be negative",
@@ -845,10 +853,10 @@ func TestExtraSpecsValidate(t *testing.T) {
 		{
 			name: "Duplicate candidate zone",
 			specs: &extraSpecs{CapacityPolicy: &CapacityPolicy{
-				Zones: []string{"us-central1-a"}, ProvisioningModels: []string{"STANDARD"},
-				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-a", "us-central1-a"}}},
+				Zones: []string{"example-region-a"}, ProvisioningModels: []string{"STANDARD"},
+				Candidates: []CapacityCandidate{{MachineType: "n2-standard-4", Architecture: params.Amd64, Zones: []string{"example-region-a", "example-region-a"}}},
 			}},
-			wantErr: true, errMsg: `duplicate zone "us-central1-a"`,
+			wantErr: true, errMsg: `duplicate zone "example-region-a"`,
 		},
 	}
 

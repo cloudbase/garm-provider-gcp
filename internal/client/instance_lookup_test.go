@@ -35,12 +35,12 @@ import (
 func TestGetInstanceUsesZonePrefixedProviderID(t *testing.T) {
 	ctx := context.Background()
 	gcpCli, mockClient := lookupTestClient()
-	expected := createdPolicyInstance("us-central1-b")
+	expected := createdPolicyInstance("example-region-b")
 	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
-		Project: "example-project", Zone: "us-central1-b", Instance: "garm-instance",
+		Project: "example-project", Zone: "example-region-b", Instance: "garm-instance",
 	}, mock.Anything).Return(expected, nil).Once()
 
-	instance, err := gcpCli.GetInstance(ctx, "us-central1-b/garm-instance")
+	instance, err := gcpCli.GetInstance(ctx, "example-region-b/garm-instance")
 	require.NoError(t, err)
 	assert.Equal(t, expected, instance)
 	mockClient.AssertExpectations(t)
@@ -49,12 +49,12 @@ func TestGetInstanceUsesZonePrefixedProviderID(t *testing.T) {
 func TestGetInstanceNormalizesZonePrefixedProviderID(t *testing.T) {
 	ctx := context.Background()
 	gcpCli, mockClient := lookupTestClient()
-	expected := createdPolicyInstance("us-central1-b")
+	expected := createdPolicyInstance("example-region-b")
 	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
-		Project: "example-project", Zone: "us-central1-b", Instance: "garm-instance",
+		Project: "example-project", Zone: "example-region-b", Instance: "garm-instance",
 	}, mock.Anything).Return(expected, nil).Once()
 
-	instance, err := gcpCli.GetInstance(ctx, "US-CENTRAL1-B/GARM-INSTANCE")
+	instance, err := gcpCli.GetInstance(ctx, "EXAMPLE-REGION-B/GARM-INSTANCE")
 	require.NoError(t, err)
 	assert.Equal(t, expected, instance)
 	mockClient.AssertExpectations(t)
@@ -78,19 +78,19 @@ func TestGetInstanceFallsBackForLegacyBareProviderID(t *testing.T) {
 	ctx := context.Background()
 	gcpCli, mockClient := lookupTestClient()
 	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
-		Project: "example-project", Zone: "us-central1-a", Instance: "garm-instance",
+		Project: "example-project", Zone: "example-region-a", Instance: "garm-instance",
 	}, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
 	mockClient.On("AggregatedList", ctx, mock.MatchedBy(func(req *computepb.AggregatedListInstancesRequest) bool {
 		return req.Project == "example-project" && req.GetFilter() == `name = "garm-instance"`
 	}), mock.Anything).Return(&compute.InstancesScopedListPairIterator{}).Once()
-	instance := createdPolicyInstance("us-central1-b")
+	instance := createdPolicyInstance("example-region-b")
 	setAggregatedResults(t, compute.InstancesScopedListPair{
-		Key: "zones/us-central1-b", Value: &computepb.InstancesScopedList{Instances: []*computepb.Instance{instance}},
+		Key: "zones/example-region-b", Value: &computepb.InstancesScopedList{Instances: []*computepb.Instance{instance}},
 	})
 
 	result, err := gcpCli.GetInstance(ctx, "garm-instance")
 	require.NoError(t, err)
-	assert.Equal(t, "zones/us-central1-b", result.GetZone())
+	assert.Equal(t, "zones/example-region-b", result.GetZone())
 	mockClient.AssertExpectations(t)
 }
 
@@ -101,15 +101,15 @@ func TestDeleteInstanceFallsBackForLegacyBareProviderID(t *testing.T) {
 	WaitOp = func(*compute.Operation, context.Context, ...gax.CallOption) error { return nil }
 	t.Cleanup(func() { WaitOp = previousWaitOp })
 	mockClient.On("Delete", ctx, &computepb.DeleteInstanceRequest{
-		Project: "example-project", Zone: "us-central1-a", Instance: "garm-instance",
+		Project: "example-project", Zone: "example-region-a", Instance: "garm-instance",
 	}, mock.Anything).Return((*compute.Operation)(nil), notFoundError()).Once()
 	mockClient.On("AggregatedList", ctx, mock.Anything, mock.Anything).Return(&compute.InstancesScopedListPairIterator{}).Once()
 	setAggregatedResults(t, compute.InstancesScopedListPair{
-		Key:   "zones/us-central1-b",
+		Key:   "zones/example-region-b",
 		Value: &computepb.InstancesScopedList{Instances: []*computepb.Instance{{Name: proto.String("garm-instance")}}},
 	})
 	mockClient.On("Delete", ctx, &computepb.DeleteInstanceRequest{
-		Project: "example-project", Zone: "us-central1-b", Instance: "garm-instance",
+		Project: "example-project", Zone: "example-region-b", Instance: "garm-instance",
 	}, mock.Anything).Return(&compute.Operation{}, nil).Once()
 
 	require.NoError(t, gcpCli.DeleteInstance(ctx, "garm-instance"))
@@ -123,17 +123,17 @@ func TestDeleteInstanceUsesZonePrefixedProviderID(t *testing.T) {
 	WaitOp = func(*compute.Operation, context.Context, ...gax.CallOption) error { return nil }
 	t.Cleanup(func() { WaitOp = previousWaitOp })
 	mockClient.On("Delete", ctx, &computepb.DeleteInstanceRequest{
-		Project: "example-project", Zone: "us-central1-f", Instance: "garm-instance",
+		Project: "example-project", Zone: "example-region-f", Instance: "garm-instance",
 	}, mock.Anything).Return(&compute.Operation{}, nil).Once()
 
-	require.NoError(t, gcpCli.DeleteInstance(ctx, "us-central1-f/garm-instance"))
+	require.NoError(t, gcpCli.DeleteInstance(ctx, "example-region-f/garm-instance"))
 	mockClient.AssertNotCalled(t, "AggregatedList", mock.Anything, mock.Anything, mock.Anything)
 }
 
 func lookupTestClient() (*GcpCli, *MockGcpClient) {
 	mockClient := new(MockGcpClient)
 	return &GcpCli{
-		cfg:    &config.Config{ProjectId: "example-project", Zone: "us-central1-a"},
+		cfg:    &config.Config{ProjectId: "example-project", Zone: "example-region-a"},
 		client: mockClient,
 	}, mockClient
 }

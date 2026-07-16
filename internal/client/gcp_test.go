@@ -125,7 +125,7 @@ func TestCreateCapacityInstanceUsesExtraSpecsNetwork(t *testing.T) {
 	regional.On("BulkInsert", ctx, mock.MatchedBy(func(req *computepb.BulkInsertRegionInstanceRequest) bool {
 		return req.GetBulkInsertInstanceResourceResource().GetInstanceProperties().GetNetworkInterfaces()[0].GetNetwork() == "extra-specs-network"
 	}), mock.Anything).Return(&compute.Operation{}, nil).Once()
-	created := createdPolicyInstance("us-central1-a")
+	created := createdPolicyInstance("example-region-a")
 	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return(created, nil).Once()
 	runnerSpec := capacityRunnerSpec()
 	runnerSpec.NetworkID = "extra-specs-network"
@@ -141,7 +141,7 @@ func TestCreateInstanceSpotScheduling(t *testing.T) {
 	mockClient := new(MockGcpClient)
 	WaitOp = func(op *compute.Operation, ctx context.Context, opts ...gax.CallOption) error { return nil }
 	gcpCli := &GcpCli{
-		cfg:    &config.Config{Zone: "us-central1-a", ProjectId: "my-project", NetworkID: "my-network", SubnetworkID: "my-subnetwork"},
+		cfg:    &config.Config{Zone: "example-region-a", ProjectId: "my-project", NetworkID: "my-network", SubnetworkID: "my-subnetwork"},
 		client: mockClient,
 	}
 	mockClient.On("Insert", mock.Anything, mock.MatchedBy(func(req *computepb.InsertInstanceRequest) bool {
@@ -172,15 +172,15 @@ func TestCreateInstancePreservesLegacyZonalPlacement(t *testing.T) {
 	})
 	gcpCli := &GcpCli{
 		cfg: &config.Config{
-			Zone: "us-central1-f", ProjectId: "my-project", NetworkID: "configured-network",
+			Zone: "example-region-f", ProjectId: "my-project", NetworkID: "configured-network",
 			SubnetworkID: "configured-subnetwork", ExternalIPAccess: true,
 		},
 		client: mockClient,
 	}
 	mockClient.On("Insert", ctx, mock.MatchedBy(func(req *computepb.InsertInstanceRequest) bool {
 		instance := req.GetInstanceResource()
-		return req.Project == "my-project" && req.Zone == "us-central1-f" &&
-			instance.GetMachineType() == "zones/us-central1-f/machineTypes/t2a-standard-1" &&
+		return req.Project == "my-project" && req.Zone == "example-region-f" &&
+			instance.GetMachineType() == "zones/example-region-f/machineTypes/t2a-standard-1" &&
 			instance.GetDisks()[0].GetInitializeParams().GetSourceImage() == "projects/my-project/global/images/family/ci-runner-2404-arm64" &&
 			instance.GetDisks()[0].GetInitializeParams().GetDiskSizeGb() == 100 &&
 			instance.GetNetworkInterfaces()[0].GetNetwork() == "configured-network" &&
@@ -201,7 +201,7 @@ func TestCreateInstanceFallsBackToStandardOnlyForCapacity(t *testing.T) {
 	mockClient := new(MockGcpClient)
 	WaitOp = func(op *compute.Operation, ctx context.Context, opts ...gax.CallOption) error { return nil }
 	gcpCli := &GcpCli{
-		cfg:    &config.Config{Zone: "us-central1-a", ProjectId: "my-project", NetworkID: "my-network", SubnetworkID: "my-subnetwork"},
+		cfg:    &config.Config{Zone: "example-region-a", ProjectId: "my-project", NetworkID: "my-network", SubnetworkID: "my-subnetwork"},
 		client: mockClient,
 	}
 	mockClient.On("Insert", mock.Anything, mock.MatchedBy(func(req *computepb.InsertInstanceRequest) bool {
@@ -222,7 +222,7 @@ func TestCreateInstanceDoesNotFallbackForNonCapacityErrors(t *testing.T) {
 	ctx := context.Background()
 	mockClient := new(MockGcpClient)
 	gcpCli := &GcpCli{
-		cfg:    &config.Config{Zone: "us-central1-a", ProjectId: "my-project", NetworkID: "my-network", SubnetworkID: "my-subnetwork"},
+		cfg:    &config.Config{Zone: "example-region-a", ProjectId: "my-project", NetworkID: "my-network", SubnetworkID: "my-subnetwork"},
 		client: mockClient,
 	}
 	mockClient.On("Insert", mock.Anything, mock.Anything, mock.Anything).Return((*compute.Operation)(nil), errors.New("QUOTA_EXCEEDED")).Once()
@@ -423,7 +423,7 @@ func TestListDescribedInstances(t *testing.T) {
 	NextAggregatedIt = func(*compute.InstancesScopedListPairIterator) (compute.InstancesScopedListPair, error) {
 		if iteration == 0 {
 			iteration++
-			return compute.InstancesScopedListPair{Key: "zones/europe-west1-d", Value: &computepb.InstancesScopedList{Instances: expectedInstances}}, nil
+			return compute.InstancesScopedListPair{Key: "zones/example-region-d", Value: &computepb.InstancesScopedList{Instances: expectedInstances}}, nil
 		}
 		return compute.InstancesScopedListPair{}, iterator.Done
 	}

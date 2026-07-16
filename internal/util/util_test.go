@@ -73,14 +73,14 @@ func TestGcpInstanceToParamsInstance(t *testing.T) {
 		{
 			name: "Zone-prefixed provider ID",
 			gcpInstance: &computepb.Instance{
-				Name: proto.String("garm-instance"), Zone: proto.String("https://www.googleapis.com/compute/v1/projects/example/zones/us-central1-b"),
+				Name: proto.String("garm-instance"), Zone: proto.String("https://www.googleapis.com/compute/v1/projects/example/zones/example-region-b"),
 				Labels:   map[string]string{"ostype": "linux"},
 				Disks:    []*computepb.AttachedDisk{{Architecture: proto.String("ARM64")}},
 				Metadata: &computepb.Metadata{Items: []*computepb.Items{{Key: proto.String(CapacityPolicyMetadataKey), Value: proto.String("true")}}},
 				Status:   proto.String("RUNNING"),
 			},
 			expected: params.ProviderInstance{
-				ProviderID: "us-central1-b/garm-instance", Name: "garm-instance", OSType: "linux", OSArch: params.Arm64, Status: "running",
+				ProviderID: "example-region-b/garm-instance", Name: "garm-instance", OSType: "linux", OSArch: params.Arm64, Status: "running",
 			},
 		},
 		{
@@ -166,9 +166,9 @@ func TestGetMachineType(t *testing.T) {
 		expected string
 	}{
 		name:     "ValidMachineType",
-		zone:     "us-central1-a",
+		zone:     "example-region-a",
 		flavor:   "n1-standard-1",
-		expected: "zones/us-central1-a/machineTypes/n1-standard-1",
+		expected: "zones/example-region-a/machineTypes/n1-standard-1",
 	}
 
 	machine := GetMachineType(test.zone, test.flavor)

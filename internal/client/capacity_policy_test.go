@@ -43,9 +43,9 @@ import (
 
 func TestBuildPlacementAttemptsOrderingAndZoneCompatibility(t *testing.T) {
 	policy := &spec.CapacityPolicy{
-		Zones: []string{"us-central1-a", "us-central1-b", "us-central1-c"},
+		Zones: []string{"example-region-a", "example-region-b", "example-region-c"},
 		Candidates: []spec.CapacityCandidate{
-			{MachineType: "t2a-standard-2", Architecture: params.Arm64, Zones: []string{"us-central1-a", "us-central1-b"}},
+			{MachineType: "t2a-standard-2", Architecture: params.Arm64, Zones: []string{"example-region-a", "example-region-b"}},
 			{MachineType: "c4a-standard-2", Architecture: params.Arm64},
 			{MachineType: "c4a-highcpu-4", Architecture: params.Arm64},
 		},
@@ -55,9 +55,9 @@ func TestBuildPlacementAttemptsOrderingAndZoneCompatibility(t *testing.T) {
 	attempts := buildPlacementAttempts(policy)
 	require.Len(t, attempts, 4)
 	assert.Equal(t, "SPOT", attempts[0].model)
-	assert.Equal(t, []string{"us-central1-a", "us-central1-b"}, attempts[0].zones)
+	assert.Equal(t, []string{"example-region-a", "example-region-b"}, attempts[0].zones)
 	assert.Equal(t, []int{0}, candidateRanks(attempts[0].candidates))
-	assert.Equal(t, []string{"us-central1-a", "us-central1-b", "us-central1-c"}, attempts[1].zones)
+	assert.Equal(t, []string{"example-region-a", "example-region-b", "example-region-c"}, attempts[1].zones)
 	assert.Equal(t, []int{1, 2}, candidateRanks(attempts[1].candidates))
 	assert.Equal(t, "STANDARD", attempts[2].model)
 	assert.Equal(t, []int{0}, candidateRanks(attempts[2].candidates))
@@ -66,23 +66,23 @@ func TestBuildPlacementAttemptsOrderingAndZoneCompatibility(t *testing.T) {
 
 func TestBuildPlacementAttemptsTreatsCandidateZonesAsASet(t *testing.T) {
 	policy := &spec.CapacityPolicy{
-		Zones: []string{"us-central1-a", "us-central1-b", "us-central1-c"},
+		Zones: []string{"example-region-a", "example-region-b", "example-region-c"},
 		Candidates: []spec.CapacityCandidate{
-			{MachineType: "n2d-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-b", "us-central1-a"}},
-			{MachineType: "n2-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-a", "us-central1-b"}},
+			{MachineType: "n2d-standard-4", Architecture: params.Amd64, Zones: []string{"example-region-b", "example-region-a"}},
+			{MachineType: "n2-standard-4", Architecture: params.Amd64, Zones: []string{"example-region-a", "example-region-b"}},
 		},
 		ProvisioningModels: []string{"STANDARD"},
 	}
 
 	attempts := buildPlacementAttempts(policy)
 	require.Len(t, attempts, 1)
-	assert.Equal(t, []string{"us-central1-a", "us-central1-b"}, attempts[0].zones)
+	assert.Equal(t, []string{"example-region-a", "example-region-b"}, attempts[0].zones)
 	assert.Equal(t, []int{0, 1}, candidateRanks(attempts[0].candidates))
 }
 
 func TestBuildBulkInsertRequest(t *testing.T) {
 	runnerSpec := capacityRunnerSpec()
-	runnerSpec.CapacityPolicy.Zones = []string{"us-central1-a", "us-central1-b"}
+	runnerSpec.CapacityPolicy.Zones = []string{"example-region-a", "example-region-b"}
 	runnerSpec.CapacityPolicy.Candidates = []spec.CapacityCandidate{
 		{MachineType: "n2d-standard-4", Architecture: params.Amd64, Image: "projects/example/global/images/override", DiskType: "hyperdisk-balanced", DiskSize: 150},
 		{MachineType: "n2-standard-4", Architecture: params.Amd64},
@@ -96,13 +96,13 @@ func TestBuildBulkInsertRequest(t *testing.T) {
 	req, err := buildBulkInsertRequest("example-project", runnerSpec, inst, "SPOT", runnerSpec.CapacityPolicy.Zones, candidates)
 	require.NoError(t, err)
 	assert.Equal(t, "example-project", req.Project)
-	assert.Equal(t, "us-central1", req.Region)
+	assert.Equal(t, "example-region", req.Region)
 	assert.NotEmpty(t, req.GetRequestId())
 	resource := req.GetBulkInsertInstanceResourceResource()
 	assert.EqualValues(t, 1, resource.GetCount())
 	assert.EqualValues(t, 1, resource.GetMinCount())
 	assert.Equal(t, "ANY_SINGLE_ZONE", resource.GetLocationPolicy().GetTargetShape())
-	assert.Equal(t, []string{"zones/us-central1-a", "zones/us-central1-b"}, []string{
+	assert.Equal(t, []string{"zones/example-region-a", "zones/example-region-b"}, []string{
 		resource.GetLocationPolicy().GetZones()[0].GetZone(),
 		resource.GetLocationPolicy().GetZones()[1].GetZone(),
 	})
@@ -258,7 +258,7 @@ func TestRegionalWaitOpFailuresUsePlacementClassification(t *testing.T) {
 			regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return(&compute.Operation{}, nil).Times(test.wantCalls)
 			mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
 			if !test.wantError {
-				mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return(createdPolicyInstance("us-central1-a"), nil).Once()
+				mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return(createdPolicyInstance("example-region-a"), nil).Once()
 			}
 
 			result, err := gcpCli.createCapacityInstance(ctx, runnerSpec, basePolicyInstance())
@@ -267,7 +267,7 @@ func TestRegionalWaitOpFailuresUsePlacementClassification(t *testing.T) {
 				assert.Nil(t, result)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, "zones/us-central1-a", result.GetZone())
+				assert.Equal(t, "zones/example-region-a", result.GetZone())
 			}
 			assert.Equal(t, test.wantCalls, waitCalls)
 			regional.AssertNumberOfCalls(t, "BulkInsert", test.wantCalls)
@@ -341,7 +341,7 @@ func TestQuotaAdvancesCandidateWithDistinctLog(t *testing.T) {
 		return len(selections) == 1 && retained
 	}), mock.Anything).Return(&compute.Operation{}, nil).Once()
 	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
-	created := createdPolicyInstance("us-central1-a")
+	created := createdPolicyInstance("example-region-a")
 	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return(created, nil).Once()
 
 	var logs bytes.Buffer
@@ -367,12 +367,12 @@ func TestCapacityErrorAdvancesProvisioningModel(t *testing.T) {
 	regional.On("BulkInsert", ctx, mock.MatchedBy(hasProvisioningModel("SPOT")), mock.Anything).Return((*compute.Operation)(nil), errors.New("ZONE_RESOURCE_POOL_EXHAUSTED")).Once()
 	regional.On("BulkInsert", ctx, mock.MatchedBy(hasProvisioningModel("STANDARD")), mock.Anything).Return(&compute.Operation{}, nil).Once()
 	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
-	created := createdPolicyInstance("us-central1-a")
+	created := createdPolicyInstance("example-region-a")
 	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return(created, nil).Once()
 
 	result, err := gcpCli.createCapacityInstance(ctx, runnerSpec, basePolicyInstance())
 	require.NoError(t, err)
-	assert.Equal(t, "zones/us-central1-a", result.GetZone())
+	assert.Equal(t, "zones/example-region-a", result.GetZone())
 	regional.AssertNumberOfCalls(t, "BulkInsert", 2)
 }
 
@@ -382,28 +382,28 @@ func TestCapacityErrorAdvancesZoneCompatibleCandidate(t *testing.T) {
 	runnerSpec := capacityRunnerSpec()
 	runnerSpec.BootstrapParams.OSArch = params.Arm64
 	runnerSpec.CapacityPolicy.ProvisioningModels = []string{"STANDARD"}
-	runnerSpec.CapacityPolicy.Zones = []string{"us-central1-a", "us-central1-b"}
+	runnerSpec.CapacityPolicy.Zones = []string{"example-region-a", "example-region-b"}
 	runnerSpec.CapacityPolicy.Candidates = []spec.CapacityCandidate{
-		{MachineType: "t2a-standard-2", Architecture: params.Arm64, Zones: []string{"us-central1-a"}},
+		{MachineType: "t2a-standard-2", Architecture: params.Arm64, Zones: []string{"example-region-a"}},
 		{MachineType: "c4a-standard-2", Architecture: params.Arm64},
 	}
 	expectNoExistingPolicyInstance(mockClient, ctx, runnerSpec.CapacityPolicy.Zones...)
-	regional.On("BulkInsert", ctx, mock.MatchedBy(hasFirstZone("zones/us-central1-a")), mock.Anything).Return((*compute.Operation)(nil), errors.New("ZONE_RESOURCE_POOL_EXHAUSTED: t2a stockout")).Once()
+	regional.On("BulkInsert", ctx, mock.MatchedBy(hasFirstZone("zones/example-region-a")), mock.Anything).Return((*compute.Operation)(nil), errors.New("ZONE_RESOURCE_POOL_EXHAUSTED: t2a stockout")).Once()
 	regional.On("BulkInsert", ctx, mock.MatchedBy(func(req *computepb.BulkInsertRegionInstanceRequest) bool {
 		zones := req.GetBulkInsertInstanceResourceResource().GetLocationPolicy().GetZones()
-		return len(zones) == 2 && zones[1].GetZone() == "zones/us-central1-b"
+		return len(zones) == 2 && zones[1].GetZone() == "zones/example-region-b"
 	}), mock.Anything).Return(&compute.Operation{}, nil).Once()
 	mockClient.On("Get", ctx, mock.MatchedBy(func(req *computepb.GetInstanceRequest) bool {
-		return req.Zone == "us-central1-a"
+		return req.Zone == "example-region-a"
 	}), mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Twice()
-	created := createdPolicyInstance("us-central1-b")
+	created := createdPolicyInstance("example-region-b")
 	mockClient.On("Get", ctx, mock.MatchedBy(func(req *computepb.GetInstanceRequest) bool {
-		return req.Zone == "us-central1-b"
+		return req.Zone == "example-region-b"
 	}), mock.Anything).Return(created, nil).Once()
 
 	result, err := gcpCli.createCapacityInstance(ctx, runnerSpec, basePolicyInstance())
 	require.NoError(t, err)
-	assert.Equal(t, "zones/us-central1-b", result.GetZone())
+	assert.Equal(t, "zones/example-region-b", result.GetZone())
 	regional.AssertNumberOfCalls(t, "BulkInsert", 2)
 }
 
@@ -427,14 +427,14 @@ func TestTerminalErrorAggregatesEveryCandidateReason(t *testing.T) {
 	gcpCli, mockClient, regional := policyTestClient(t)
 	runnerSpec := capacityRunnerSpec()
 	runnerSpec.CapacityPolicy.ProvisioningModels = []string{"SPOT"}
-	runnerSpec.CapacityPolicy.Zones = []string{"us-central1-a", "us-central1-b"}
+	runnerSpec.CapacityPolicy.Zones = []string{"example-region-a", "example-region-b"}
 	runnerSpec.CapacityPolicy.Candidates = []spec.CapacityCandidate{
-		{MachineType: "n2d-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-a"}},
-		{MachineType: "n2-standard-4", Architecture: params.Amd64, Zones: []string{"us-central1-b"}},
+		{MachineType: "n2d-standard-4", Architecture: params.Amd64, Zones: []string{"example-region-a"}},
+		{MachineType: "n2-standard-4", Architecture: params.Amd64, Zones: []string{"example-region-b"}},
 	}
 	expectNoExistingPolicyInstance(mockClient, ctx, runnerSpec.CapacityPolicy.Zones...)
-	regional.On("BulkInsert", ctx, mock.MatchedBy(hasFirstZone("zones/us-central1-a")), mock.Anything).Return((*compute.Operation)(nil), errors.New("ZONE_RESOURCE_POOL_EXHAUSTED: n2d stockout")).Once()
-	regional.On("BulkInsert", ctx, mock.MatchedBy(hasFirstZone("zones/us-central1-b")), mock.Anything).Return((*compute.Operation)(nil), errors.New("RESOURCE_POOL_EXHAUSTED: n2 stockout")).Once()
+	regional.On("BulkInsert", ctx, mock.MatchedBy(hasFirstZone("zones/example-region-a")), mock.Anything).Return((*compute.Operation)(nil), errors.New("ZONE_RESOURCE_POOL_EXHAUSTED: n2d stockout")).Once()
+	regional.On("BulkInsert", ctx, mock.MatchedBy(hasFirstZone("zones/example-region-b")), mock.Anything).Return((*compute.Operation)(nil), errors.New("RESOURCE_POOL_EXHAUSTED: n2 stockout")).Once()
 	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Twice()
 
 	_, err := gcpCli.createCapacityInstance(ctx, runnerSpec, basePolicyInstance())
@@ -449,7 +449,7 @@ func TestAmbiguousCreateErrorDeduplicatesByExactName(t *testing.T) {
 	ctx := context.Background()
 	gcpCli, mockClient, regional := policyTestClient(t)
 	runnerSpec := capacityRunnerSpec()
-	runnerSpec.CapacityPolicy.Zones = []string{"us-central1-a", "us-central1-b"}
+	runnerSpec.CapacityPolicy.Zones = []string{"example-region-a", "example-region-b"}
 	runnerSpec.CapacityPolicy.Candidates = []spec.CapacityCandidate{
 		{MachineType: "n2d-standard-4", Architecture: params.Amd64},
 		{MachineType: "n2-standard-4", Architecture: params.Amd64},
@@ -457,11 +457,11 @@ func TestAmbiguousCreateErrorDeduplicatesByExactName(t *testing.T) {
 	expectNoExistingPolicyInstance(mockClient, ctx, runnerSpec.CapacityPolicy.Zones...)
 	regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return((*compute.Operation)(nil), fmt.Errorf("ZONE_RESOURCE_POOL_EXHAUSTED: %w", context.DeadlineExceeded)).Once()
 	mockClient.On("Get", mock.Anything, &computepb.GetInstanceRequest{
-		Project: "example-project", Zone: "us-central1-a", Instance: "garm-instance",
+		Project: "example-project", Zone: "example-region-a", Instance: "garm-instance",
 	}, mock.Anything).Return((*computepb.Instance)(nil), notFoundError()).Once()
-	created := createdPolicyInstance("us-central1-b")
+	created := createdPolicyInstance("example-region-b")
 	mockClient.On("Get", mock.Anything, &computepb.GetInstanceRequest{
-		Project: "example-project", Zone: "us-central1-b", Instance: "garm-instance",
+		Project: "example-project", Zone: "example-region-b", Instance: "garm-instance",
 	}, mock.Anything).Return(created, nil).Once()
 
 	result, err := gcpCli.createCapacityInstance(ctx, runnerSpec, basePolicyInstance())
@@ -497,11 +497,11 @@ func TestAmbiguousCreateReconciliationDetachesCanceledContext(t *testing.T) {
 	gcpCli, mockClient, regional := policyTestClient(t)
 	expectNoExistingPolicyInstance(mockClient, ctx, capacityRunnerSpec().CapacityPolicy.Zones...)
 	regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Run(func(mock.Arguments) { cancel() }).Return((*compute.Operation)(nil), context.Canceled).Once()
-	created := createdPolicyInstance("us-central1-a")
+	created := createdPolicyInstance("example-region-a")
 	mockClient.On("Get", mock.MatchedBy(func(lookupCtx context.Context) bool {
 		return lookupCtx.Err() == nil && lookupCtx.Value(traceKey) == "preserved"
 	}), &computepb.GetInstanceRequest{
-		Project: "example-project", Zone: "us-central1-a", Instance: "garm-instance",
+		Project: "example-project", Zone: "example-region-a", Instance: "garm-instance",
 	}, mock.Anything).Return(created, nil).Once()
 
 	result, err := gcpCli.createCapacityInstance(ctx, capacityRunnerSpec(), basePolicyInstance())
@@ -513,9 +513,9 @@ func TestAmbiguousCreateReconciliationDetachesCanceledContext(t *testing.T) {
 func TestExistingCapacityInstanceSkipsBulkInsert(t *testing.T) {
 	ctx := context.Background()
 	gcpCli, mockClient, regional := policyTestClient(t)
-	existing := matchingPolicyInstance("us-central1-a")
+	existing := matchingPolicyInstance("example-region-a")
 	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
-		Project: "example-project", Zone: "us-central1-a", Instance: "garm-instance",
+		Project: "example-project", Zone: "example-region-a", Instance: "garm-instance",
 	}, mock.Anything).Return(existing, nil).Once()
 
 	result, err := gcpCli.createCapacityInstance(ctx, capacityRunnerSpec(), basePolicyInstance())
@@ -527,7 +527,7 @@ func TestExistingCapacityInstanceSkipsBulkInsert(t *testing.T) {
 func TestExistingCapacityInstanceWithWrongIdentityFailsClosed(t *testing.T) {
 	ctx := context.Background()
 	gcpCli, mockClient, regional := policyTestClient(t)
-	unrelated := createdPolicyInstance("us-central1-a")
+	unrelated := createdPolicyInstance("example-region-a")
 	mockClient.On("Get", ctx, mock.Anything, mock.Anything).Return(unrelated, nil).Once()
 
 	_, err := gcpCli.createCapacityInstance(ctx, capacityRunnerSpec(), basePolicyInstance())
@@ -573,13 +573,13 @@ func candidateRanks(candidates []rankedCandidate) []int {
 func capacityRunnerSpec() *spec.RunnerSpec {
 	return &spec.RunnerSpec{
 		CapacityPolicy: &spec.CapacityPolicy{
-			Zones: []string{"us-central1-a"},
+			Zones: []string{"example-region-a"},
 			Candidates: []spec.CapacityCandidate{
 				{MachineType: "n2d-standard-4", Architecture: params.Amd64},
 			},
 			ProvisioningModels: []string{"SPOT", "STANDARD"},
 		},
-		Zone: "us-central1-a", NetworkID: "network", SubnetworkID: "subnetwork", NicType: "GVNIC",
+		Zone: "example-region-a", NetworkID: "network", SubnetworkID: "subnetwork", NicType: "GVNIC",
 		DiskSize: 100, DiskType: "pd-balanced", CustomLabels: map[string]string{"purpose": "runner"},
 		ServiceAccounts: []*computepb.ServiceAccount{{Email: proto.String("runner@example.invalid")}},
 		BootstrapParams: params.BootstrapInstance{
@@ -634,7 +634,7 @@ func policyTestClient(t *testing.T) (*GcpCli, *MockGcpClient, *MockRegionalGcpCl
 	WaitOp = func(*compute.Operation, context.Context, ...gax.CallOption) error { return nil }
 	t.Cleanup(func() { WaitOp = previousWaitOp })
 	return &GcpCli{
-		cfg:    &config.Config{ProjectId: "example-project", Zone: "us-central1-a"},
+		cfg:    &config.Config{ProjectId: "example-project", Zone: "example-region-a"},
 		client: mockClient, regionClient: regional,
 	}, mockClient, regional
 }

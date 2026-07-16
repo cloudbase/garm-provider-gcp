@@ -120,7 +120,7 @@ func TestCreateCapacityInstanceReturnsZonePrefixedID(t *testing.T) {
 
 	gcpProvider := &GcpProvider{gcpCli: &client.GcpCli{}, controllerID: "controller"}
 	providerConfig := config.Config{
-		Zone: "us-central1-a", ProjectId: "example-project", NetworkID: "network", SubnetworkID: "subnetwork",
+		Zone: "example-region-a", ProjectId: "example-project", NetworkID: "network", SubnetworkID: "subnetwork",
 	}
 	gcpProvider.gcpCli.SetConfig(&providerConfig)
 	gcpProvider.gcpCli.SetClient(mockClient)
@@ -128,10 +128,10 @@ func TestCreateCapacityInstanceReturnsZonePrefixedID(t *testing.T) {
 	regional.On("BulkInsert", ctx, mock.Anything, mock.Anything).Return(&compute.Operation{}, nil).Once()
 	notFound, _ := apierror.FromError(&googleapi.Error{Code: 404, Message: "not found"})
 	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
-		Project: "example-project", Zone: "us-central1-a", Instance: "garm-instance",
+		Project: "example-project", Zone: "example-region-a", Instance: "garm-instance",
 	}, mock.Anything).Return((*computepb.Instance)(nil), notFound).Once()
 	created := &computepb.Instance{
-		Name: proto.String("garm-instance"), Zone: proto.String("zones/us-central1-a"), Status: proto.String("RUNNING"),
+		Name: proto.String("garm-instance"), Zone: proto.String("zones/example-region-a"), Status: proto.String("RUNNING"),
 		Labels: map[string]string{"garmpoolid": "pool", "garmcontrollerid": "controller", "ostype": "linux"},
 		Metadata: &computepb.Metadata{Items: []*computepb.Items{
 			{Key: proto.String("runner_name"), Value: proto.String("garm-instance")},
@@ -140,7 +140,7 @@ func TestCreateCapacityInstanceReturnsZonePrefixedID(t *testing.T) {
 		Disks: []*computepb.AttachedDisk{{Architecture: proto.String("amd64")}},
 	}
 	mockClient.On("Get", ctx, &computepb.GetInstanceRequest{
-		Project: "example-project", Zone: "us-central1-a", Instance: "garm-instance",
+		Project: "example-project", Zone: "example-region-a", Instance: "garm-instance",
 	}, mock.Anything).Return(created, nil).Once()
 
 	result, err := gcpProvider.CreateInstance(ctx, params.BootstrapInstance{
@@ -148,14 +148,14 @@ func TestCreateCapacityInstanceReturnsZonePrefixedID(t *testing.T) {
 		OSType: params.Linux, OSArch: params.Amd64, PoolID: "pool",
 		ExtraSpecs: json.RawMessage(`{
 			"capacity_policy": {
-				"zones": ["us-central1-a"],
+				"zones": ["example-region-a"],
 				"candidates": [{"machine_type": "n2-standard-4", "architecture": "amd64"}],
 				"provisioning_models": ["STANDARD"]
 			}
 		}`),
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "us-central1-a/garm-instance", result.ProviderID)
+	assert.Equal(t, "example-region-a/garm-instance", result.ProviderID)
 	assert.Equal(t, "garm-instance", result.Name)
 	regional.AssertExpectations(t)
 	mockClient.AssertExpectations(t)
@@ -377,7 +377,7 @@ func TestListInstances(t *testing.T) {
 			Status:     "stopped",
 		},
 		{
-			ProviderID: "europe-west1-d/garm-instance-4",
+			ProviderID: "example-region-d/garm-instance-4",
 			Name:       "garm-instance-4",
 			OSType:     "linux",
 			OSArch:     "amd64",
@@ -390,7 +390,7 @@ func TestListInstances(t *testing.T) {
 	client.NextAggregatedIt = func(*compute.InstancesScopedListPairIterator) (compute.InstancesScopedListPair, error) {
 		if iteration == 0 {
 			iteration++
-			return compute.InstancesScopedListPair{Key: "zones/europe-west1-d", Value: &computepb.InstancesScopedList{Instances: toBeIteratedInstances}}, nil
+			return compute.InstancesScopedListPair{Key: "zones/example-region-d", Value: &computepb.InstancesScopedList{Instances: toBeIteratedInstances}}, nil
 		}
 		return compute.InstancesScopedListPair{}, iterator.Done
 	}
