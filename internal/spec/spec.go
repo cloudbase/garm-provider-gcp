@@ -124,6 +124,20 @@ func (e *extraSpecs) Validate() error {
 			return fmt.Errorf("network tag '%s' does not match requirements", tag)
 		}
 	}
+	if e.RegionalPlacement != nil {
+		if e.DisplayDevice {
+			return fmt.Errorf("regional_placement cannot be combined with display_device")
+		}
+		if e.SourceSnapshot != "" {
+			return fmt.Errorf("regional_placement cannot be combined with source_snapshot")
+		}
+		if len(e.CustomLabels) > 60 {
+			return fmt.Errorf("regional placement custom labels cannot exceed 60 items")
+		}
+		if err := e.RegionalPlacement.Validate(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -147,6 +161,8 @@ type extraSpecs struct {
 	EnableIntegrityMonitoring bool `json:"enable_integrity_monitoring,omitempty" jsonschema:"description=Enable integrity monitoring on the VM."`
 	// CMEK (Customer-Managed Encryption Key) for boot disk
 	BootDiskKmsKeyName string `json:"boot_disk_kms_key_name,omitempty" jsonschema:"description=The Cloud KMS key to use for boot disk encryption. Format: projects/{project}/locations/{location}/keyRings/{keyRing}/cryptoKeys/{key}"`
+	// Regional placement options
+	RegionalPlacement *RegionalPlacement `json:"regional_placement,omitempty" jsonschema:"description=Optional regional placement using the pool's existing flavor and image."`
 	// The Cloudconfig struct from common package
 	cloudconfig.CloudConfigSpec
 }
@@ -181,6 +197,9 @@ func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapI
 	}
 
 	spec.MergeExtraSpecs(extraSpecs)
+	if spec.RegionalPlacement != nil && !cfg.EnableRegionalPlacement {
+		return nil, fmt.Errorf("regional_placement requires enable_regional_placement in the provider config")
+	}
 
 	return spec, nil
 }
@@ -209,6 +228,8 @@ type RunnerSpec struct {
 	EnableIntegrityMonitoring bool
 	// CMEK (Customer-Managed Encryption Key) for boot disk
 	BootDiskKmsKeyName string
+	// Regional placement options
+	RegionalPlacement *RegionalPlacement
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
@@ -264,6 +285,9 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	}
 	if extraSpecs.BootDiskKmsKeyName != "" {
 		r.BootDiskKmsKeyName = extraSpecs.BootDiskKmsKeyName
+	}
+	if extraSpecs.RegionalPlacement != nil {
+		r.RegionalPlacement = extraSpecs.RegionalPlacement
 	}
 }
 

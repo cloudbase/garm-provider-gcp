@@ -32,6 +32,9 @@ subnetwork_id = "projects/garm-testing/regions/europe-west1/subnetworks/garm"
 # Leave this empty if you want to use the default credentials.
 credentials_file = "/home/ubuntu/service-account-key.json"
 external_ip_access = true
+# Set this to true if you want to allow pools to opt into regional
+# placement via the regional_placement extra spec.
+enable_regional_placement = false
 ```
 
 NOTE: If you want to pass in credentials by using the `GOOGLE_APPLICATION_CREDENTIALS` environment variable, you can leave the `credentials_file` field empty, but you must pass in the variable to GARM, then in the GARM config file, you must specify that the `GOOGLE_APPLICATION_CREDENTIALS` is safe to pass to the provider by setting the `environment_variables` field to `["GOOGLE_APPLICATION_CREDENTIALS"]`:
@@ -190,6 +193,19 @@ To this end, this provider supports the following extra specs schema:
             "additionalProperties": {
                 "type": "string"
             }
+        },
+        "regional_placement": {
+            "type": "object",
+            "description": "Optional regional placement using the pool's existing flavor and image.",
+            "properties": {
+                "zones": {
+                    "type": "array",
+                    "description": "Compute Engine zones allowed for regional placement. All zones must belong to one region.",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
         }
     },
     "additionalProperties": false
@@ -219,6 +235,8 @@ An example of extra specs json would look like this:
 **NOTE**: The `custom_labels` and `network_tags` must meet the [GCP requirements for labels](https://cloud.google.com/compute/docs/labeling-resources#requirements) and the [GCP requirements for network tags](https://cloud.google.com/vpc/docs/add-remove-network-tags#restrictions)!
 
 **NOTE**: The `ssh_keys` add the option to [connect to an instance via SSH](https://cloud.google.com/compute/docs/instances/ssh) (either Linux or Windows). After you added the key as `username:ssh_public_key`, you can use the `private_key` to connect to the Linux/Windows instance via `ssh -i private_rsa username@instance_ip`. For **Windows** instances, the provider installs on the instance `google-compute-engine-ssh` and `enables ssh` if a `ssh_key` is added to extra-specs.
+
+**NOTE**: The `regional_placement` extra spec lets Compute Engine pick one of the allowed zones for each runner, using a [regional bulk insert](https://cloud.google.com/compute/docs/instances/multiple/create-in-bulk). It requires `enable_regional_placement = true` in the provider config and cannot be combined with `display_device` or `source_snapshot`. Runners created this way get a `zone/instance-name` provider ID, so the provider can manage them in whichever zone they landed in.
 
 To set it on an existing pool, simply run:
 
