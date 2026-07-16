@@ -107,6 +107,7 @@ func TestNewConfig(t *testing.T) {
 	subnetwork_id = "projects/garm-testing/regions/europe-west1/subnetworks/garm"
 	credentials_file = "/home/ubuntu/service-account-key.json"
 	external_ip_access = true
+	enable_regional_placement = true
 	`
 	// Create a temporary file
 	tmpFile, err := os.CreateTemp("", "config-*.toml")
@@ -132,4 +133,5 @@ func TestNewConfig(t *testing.T) {
 	require.Equal(t, "projects/garm-testing/regions/europe-west1/subnetworks/garm", cfg.SubnetworkID, "SubnetworkId value did not match expected")
 	require.Equal(t, "/home/ubuntu/service-account-key.json", cfg.CredentialsFile, "CredentialsFile value did not match expected")
 	require.Equal(t, true, cfg.ExternalIPAccess, "ExternalIpAccess value did not match expected")
+	require.True(t, cfg.EnableRegionalPlacement, "EnableRegionalPlacement value did not match expected")
 }

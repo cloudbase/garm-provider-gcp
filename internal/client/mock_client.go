@@ -56,5 +56,21 @@ func (m *MockGcpClient) List(ctx context.Context, req *computepb.ListInstancesRe
 
 func (m *MockGcpClient) Get(ctx context.Context, req *computepb.GetInstanceRequest, opts ...gax.CallOption) (*computepb.Instance, error) {
 	args := m.Called(ctx, req, opts)
-	return args.Get(0).(*computepb.Instance), args.Error(1)
+	instance, _ := args.Get(0).(*computepb.Instance)
+	return instance, args.Error(1)
+}
+
+func (m *MockGcpClient) AggregatedList(ctx context.Context, req *computepb.AggregatedListInstancesRequest, opts ...gax.CallOption) *compute.InstancesScopedListPairIterator {
+	args := m.Called(ctx, req, opts)
+	return args.Get(0).(*compute.InstancesScopedListPairIterator)
+}
+
+type MockRegionalGcpClient struct {
+	mock.Mock
+}
+
+func (m *MockRegionalGcpClient) BulkInsert(ctx context.Context, req *computepb.BulkInsertRegionInstanceRequest, opts ...gax.CallOption) (*compute.Operation, error) {
+	args := m.Called(ctx, req, opts)
+	operation, _ := args.Get(0).(*compute.Operation)
+	return operation, args.Error(1)
 }

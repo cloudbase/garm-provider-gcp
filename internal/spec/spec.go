@@ -92,6 +92,20 @@ func newExtraSpecsFromBootstrapData(data params.BootstrapInstance) (*extraSpecs,
 }
 
 func (e *extraSpecs) Validate() error {
+	if e.RegionalPlacement != nil {
+		if e.DisplayDevice {
+			return fmt.Errorf("regional_placement cannot be combined with display_device")
+		}
+		if e.SourceSnapshot != "" {
+			return fmt.Errorf("regional_placement cannot be combined with source_snapshot")
+		}
+		if len(e.CustomLabels) > 60 {
+			return fmt.Errorf("regional placement custom labels cannot exceed 60 items")
+		}
+		if err := e.RegionalPlacement.Validate(); err != nil {
+			return err
+		}
+	}
 	if len(e.CustomLabels) > 61 {
 		return fmt.Errorf("custom labels cannot exceed 61 items")
 	}
@@ -128,19 +142,20 @@ func (e *extraSpecs) Validate() error {
 }
 
 type extraSpecs struct {
-	DiskSize        int64                       `json:"disksize,omitempty" jsonschema:"description=The size of the root disk in GB. Default is 127 GB."`
-	DiskType        string                      `json:"disktype,omitempty" jsonschema:"description=The type of the disk. Default is pd-standard."`
-	DisplayDevice   bool                        `json:"display_device,omitempty" jsonschema:"description=Enable the display device on the VM."`
-	NetworkID       string                      `json:"network_id,omitempty" jsonschema:"description=The name of the network attached to the instance."`
-	SubnetworkID    string                      `json:"subnetwork_id,omitempty" jsonschema:"description=The name of the subnetwork attached to the instance."`
-	NicType         string                      `json:"nic_type,omitempty" jsonschema:"description=The type of the network interface card. Default is VIRTIO_NET."`
-	CustomLabels    map[string]string           `json:"custom_labels,omitempty" jsonschema:"description=Custom labels to apply to the instance. Each label is a key-value pair where both key and value are strings."`
-	NetworkTags     []string                    `json:"network_tags,omitempty" jsonschema:"description=A list of network tags to be attached to the instance"`
-	ServiceAccounts []*computepb.ServiceAccount `json:"service_accounts,omitempty" jsonschema:"description=A list of service accounts to be attached to the instance"`
-	SourceSnapshot  string                      `json:"source_snapshot,omitempty" jsonschema:"description=The source snapshot to create this disk."`
-	SSHKeys         []string                    `json:"ssh_keys,omitempty" jsonschema:"description=A list of SSH keys to be added to the instance. The format is USERNAME:SSH_KEY"`
-	EnableBootDebug *bool                       `json:"enable_boot_debug,omitempty" jsonschema:"description=Enable boot debug on the VM."`
-	DisableUpdates  *bool                       `json:"disable_updates,omitempty" jsonschema:"description=Disable OS updates on boot."`
+	RegionalPlacement *RegionalPlacement          `json:"regional_placement,omitempty" jsonschema:"description=Optional regional placement using the pool's existing flavor and image."`
+	DiskSize          int64                       `json:"disksize,omitempty" jsonschema:"description=The size of the root disk in GB. Default is 127 GB."`
+	DiskType          string                      `json:"disktype,omitempty" jsonschema:"description=The type of the disk. Default is pd-standard."`
+	DisplayDevice     bool                        `json:"display_device,omitempty" jsonschema:"description=Enable the display device on the VM."`
+	NetworkID         string                      `json:"network_id,omitempty" jsonschema:"description=The name of the network attached to the instance."`
+	SubnetworkID      string                      `json:"subnetwork_id,omitempty" jsonschema:"description=The name of the subnetwork attached to the instance."`
+	NicType           string                      `json:"nic_type,omitempty" jsonschema:"description=The type of the network interface card. Default is VIRTIO_NET."`
+	CustomLabels      map[string]string           `json:"custom_labels,omitempty" jsonschema:"description=Custom labels to apply to the instance. Each label is a key-value pair where both key and value are strings."`
+	NetworkTags       []string                    `json:"network_tags,omitempty" jsonschema:"description=A list of network tags to be attached to the instance"`
+	ServiceAccounts   []*computepb.ServiceAccount `json:"service_accounts,omitempty" jsonschema:"description=A list of service accounts to be attached to the instance"`
+	SourceSnapshot    string                      `json:"source_snapshot,omitempty" jsonschema:"description=The source snapshot to create this disk."`
+	SSHKeys           []string                    `json:"ssh_keys,omitempty" jsonschema:"description=A list of SSH keys to be added to the instance. The format is USERNAME:SSH_KEY"`
+	EnableBootDebug   *bool                       `json:"enable_boot_debug,omitempty" jsonschema:"description=Enable boot debug on the VM."`
+	DisableUpdates    *bool                       `json:"disable_updates,omitempty" jsonschema:"description=Disable OS updates on boot."`
 	// Shielded VM options
 	EnableSecureBoot          bool `json:"enable_secure_boot,omitempty" jsonschema:"description=Enable Secure Boot on the VM. Requires a Shielded VM compatible image."`
 	EnableVTPM                bool `json:"enable_vtpm,omitempty" jsonschema:"description=Enable virtual Trusted Platform Module (vTPM) on the VM."`
@@ -169,40 +184,48 @@ func GetRunnerSpecFromBootstrapParams(cfg *config.Config, data params.BootstrapI
 	}
 
 	spec := &RunnerSpec{
-		Zone:            cfg.Zone,
-		Tools:           tools,
-		BootstrapParams: data,
-		NetworkID:       cfg.NetworkID,
-		SubnetworkID:    cfg.SubnetworkID,
-		ControllerID:    controllerID,
-		NicType:         defaultNicType,
-		DiskSize:        defaultDiskSizeGB,
-		CustomLabels:    labels,
+		RegionalPlacementEnabled: cfg.EnableRegionalPlacement,
+		Zone:                     cfg.Zone,
+		Tools:                    tools,
+		BootstrapParams:          data,
+		NetworkID:                cfg.NetworkID,
+		SubnetworkID:             cfg.SubnetworkID,
+		ControllerID:             controllerID,
+		NicType:                  defaultNicType,
+		DiskSize:                 defaultDiskSizeGB,
+		CustomLabels:             labels,
 	}
 
 	spec.MergeExtraSpecs(extraSpecs)
+	if spec.RegionalPlacement != nil {
+		if err := spec.Validate(); err != nil {
+			return nil, fmt.Errorf("failed to validate regional runner spec: %w", err)
+		}
+	}
 
 	return spec, nil
 }
 
 type RunnerSpec struct {
-	Zone            string
-	Tools           params.RunnerApplicationDownload
-	BootstrapParams params.BootstrapInstance
-	NetworkID       string
-	SubnetworkID    string
-	ControllerID    string
-	NicType         string
-	DisplayDevice   bool
-	DiskSize        int64
-	DiskType        string
-	CustomLabels    map[string]string
-	NetworkTags     []string
-	ServiceAccounts []*computepb.ServiceAccount
-	SourceSnapshot  string
-	SSHKeys         string
-	EnableBootDebug bool
-	DisableUpdates  bool
+	RegionalPlacement        *RegionalPlacement
+	RegionalPlacementEnabled bool
+	Zone                     string
+	Tools                    params.RunnerApplicationDownload
+	BootstrapParams          params.BootstrapInstance
+	NetworkID                string
+	SubnetworkID             string
+	ControllerID             string
+	NicType                  string
+	DisplayDevice            bool
+	DiskSize                 int64
+	DiskType                 string
+	CustomLabels             map[string]string
+	NetworkTags              []string
+	ServiceAccounts          []*computepb.ServiceAccount
+	SourceSnapshot           string
+	SSHKeys                  string
+	EnableBootDebug          bool
+	DisableUpdates           bool
 	// Shielded VM options
 	EnableSecureBoot          bool
 	EnableVTPM                bool
@@ -212,6 +235,7 @@ type RunnerSpec struct {
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
+	r.RegionalPlacement = extraSpecs.RegionalPlacement
 	if extraSpecs.NetworkID != "" {
 		r.NetworkID = extraSpecs.NetworkID
 	}
@@ -268,6 +292,9 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 }
 
 func (r *RunnerSpec) Validate() error {
+	if r.RegionalPlacement != nil && !r.RegionalPlacementEnabled {
+		return fmt.Errorf("regional placement is disabled by provider configuration")
+	}
 	if r.Zone == "" {
 		return fmt.Errorf("missing zone")
 	}
@@ -282,6 +309,9 @@ func (r *RunnerSpec) Validate() error {
 	}
 	if r.NicType == "" {
 		return fmt.Errorf("missing nic type")
+	}
+	if err := r.RegionalPlacement.Validate(); err != nil {
+		return err
 	}
 	return nil
 }
