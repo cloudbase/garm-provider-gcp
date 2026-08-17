@@ -23,6 +23,8 @@ import (
 	"github.com/cloudbase/garm-provider-common/params"
 )
 
+const RegionalPlacementLabel string = "garmregionalplacement"
+
 func GetMachineType(zone, flavor string) string {
 	machine := fmt.Sprintf("zones/%s/machineTypes/%s", zone, flavor)
 	return machine
@@ -31,6 +33,25 @@ func GetMachineType(zone, flavor string) string {
 func GetInstanceName(name string) string {
 	lowerName := strings.ToLower(name)
 	return lowerName
+}
+
+func getZoneName(zone string) string {
+	parts := strings.Split(strings.TrimSuffix(zone, "/"), "/")
+	if len(parts) == 0 {
+		return ""
+	}
+	return parts[len(parts)-1]
+}
+
+func GetRegionalProviderID(instance *computepb.Instance) (string, error) {
+	if instance == nil || instance.Labels[RegionalPlacementLabel] != "true" {
+		return "", fmt.Errorf("instance is not marked for regional placement")
+	}
+	zone := getZoneName(instance.GetZone())
+	if zone == "" {
+		return "", fmt.Errorf("regional instance zone is missing")
+	}
+	return zone + "/" + GetInstanceName(instance.GetName()), nil
 }
 
 func getNameForInstance(instance *computepb.Instance) (string, error) {
@@ -66,11 +87,35 @@ func GcpInstanceToParamsInstance(gcpInstance *computepb.Instance) (params.Provid
 		return params.ProviderInstance{}, fmt.Errorf("instance name is nil")
 	}
 
-	details := params.ProviderInstance{
-		ProviderID: GetInstanceName(*gcpInstance.Name),
-		Name:       name,
-		OSType:     params.OSType(gcpInstance.Labels["ostype"]),
-		OSArch:     params.OSArch(*gcpInstance.Disks[0].Architecture),
+	var details params.ProviderInstance
+	if gcpInstance.Labels[RegionalPlacementLabel] == "true" {
+		providerID, err := GetRegionalProviderID(gcpInstance)
+		if err != nil {
+			return params.ProviderInstance{}, err
+		}
+		if len(gcpInstance.GetDisks()) == 0 || gcpInstance.GetDisks()[0].Architecture == nil {
+			return params.ProviderInstance{}, fmt.Errorf("regional instance boot disk architecture is missing")
+		}
+		details = params.ProviderInstance{
+			ProviderID: providerID,
+			Name:       name,
+			OSType:     params.OSType(gcpInstance.Labels["ostype"]),
+		}
+		switch strings.ToUpper(gcpInstance.Disks[0].GetArchitecture()) {
+		case "AMD64", "X86_64":
+			details.OSArch = params.Amd64
+		case "ARM64":
+			details.OSArch = params.Arm64
+		default:
+			return params.ProviderInstance{}, fmt.Errorf("unsupported regional instance architecture %s", gcpInstance.Disks[0].GetArchitecture())
+		}
+	} else {
+		details = params.ProviderInstance{
+			ProviderID: GetInstanceName(*gcpInstance.Name),
+			Name:       name,
+			OSType:     params.OSType(gcpInstance.Labels["ostype"]),
+			OSArch:     params.OSArch(*gcpInstance.Disks[0].Architecture),
+		}
 	}
 
 	switch gcpInstance.GetStatus() {

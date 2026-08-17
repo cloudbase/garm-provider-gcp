@@ -181,6 +181,15 @@ func TestJsonSchemaValidation(t *testing.T) {
 			errString: "",
 		},
 		{
+			name: "Specs just with regional_placement",
+			input: json.RawMessage(`{
+				"regional_placement": {
+					"zones": ["us-central1-a", "us-central1-b"]
+				}
+			}`),
+			errString: "",
+		},
+		{
 			name: "Invalid input for display_device - wrong data type",
 			input: json.RawMessage(`{
 				"display_device": "true"
@@ -270,6 +279,13 @@ func TestJsonSchemaValidation(t *testing.T) {
 				"extra_context": "key"
 			}`),
 			errString: "schema validation failed: [extra_context: Invalid type. Expected: object, given: string]",
+		},
+		{
+			name: "Invalid input for regional_placement - wrong data type",
+			input: json.RawMessage(`{
+				"regional_placement": "us-central1-a"
+			}`),
+			errString: "schema validation failed: [regional_placement: Invalid type. Expected: object, given: string]",
 		},
 		{
 			name: "Invalid input - additional property",
@@ -587,6 +603,39 @@ func TestExtraSpecsValidate(t *testing.T) {
 			},
 			wantErr: true,
 			errMsg:  "network tag '!invalidTag' does not match requirements",
+		},
+		{
+			name: "Valid regional placement",
+			specs: &extraSpecs{
+				RegionalPlacement: &RegionalPlacement{Zones: []string{"us-central1-a", "us-central1-b"}},
+			},
+			wantErr: false,
+		},
+		{
+			name: "Regional placement combined with display_device",
+			specs: &extraSpecs{
+				RegionalPlacement: &RegionalPlacement{Zones: []string{"us-central1-a"}},
+				DisplayDevice:     true,
+			},
+			wantErr: true,
+			errMsg:  "regional_placement cannot be combined with display_device",
+		},
+		{
+			name: "Regional placement combined with source_snapshot",
+			specs: &extraSpecs{
+				RegionalPlacement: &RegionalPlacement{Zones: []string{"us-central1-a"}},
+				SourceSnapshot:    "projects/garm-testing/global/snapshots/garm-snapshot",
+			},
+			wantErr: true,
+			errMsg:  "regional_placement cannot be combined with source_snapshot",
+		},
+		{
+			name: "Regional placement with invalid zones",
+			specs: &extraSpecs{
+				RegionalPlacement: &RegionalPlacement{Zones: []string{"us-central1-a", "us-east1-b"}},
+			},
+			wantErr: true,
+			errMsg:  "regional placement zones must belong to one region",
 		},
 	}
 

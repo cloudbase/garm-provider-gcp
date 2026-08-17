@@ -41,8 +41,9 @@ const (
 )
 
 var (
-	WaitOp = (*compute.Operation).Wait
-	NextIt = (*compute.InstanceIterator).Next
+	WaitOp           = (*compute.Operation).Wait
+	NextIt           = (*compute.InstanceIterator).Next
+	NextAggregatedIt = (*compute.InstancesScopedListPairIterator).Next
 )
 
 func getHTTPClientOptionFromCredentialsFile(ctx context.Context, credentialsFile string) (option.ClientOption, error) {
@@ -86,6 +87,14 @@ func NewGcpCli(ctx context.Context, cfg *config.Config) (*GcpCli, error) {
 		cfg:    cfg,
 		client: computeClient,
 	}
+	if cfg.EnableRegionalPlacement {
+		regionClient, err := compute.NewRegionInstancesRESTClient(ctx, authOptions...)
+		if err != nil {
+			_ = computeClient.Close()
+			return nil, fmt.Errorf("error creating regional compute service: %w", err)
+		}
+		gcpCli.regionClient = regionClient
+	}
 
 	return gcpCli, nil
 }
@@ -97,11 +106,17 @@ type ClientInterface interface {
 	Delete(ctx context.Context, req *computepb.DeleteInstanceRequest, opts ...gax.CallOption) (*compute.Operation, error)
 	List(ctx context.Context, req *computepb.ListInstancesRequest, opts ...gax.CallOption) *compute.InstanceIterator
 	Get(ctx context.Context, req *computepb.GetInstanceRequest, opts ...gax.CallOption) (*computepb.Instance, error)
+	AggregatedList(ctx context.Context, req *computepb.AggregatedListInstancesRequest, opts ...gax.CallOption) *compute.InstancesScopedListPairIterator
+}
+
+type RegionalClientInterface interface {
+	BulkInsert(ctx context.Context, req *computepb.BulkInsertRegionInstanceRequest, opts ...gax.CallOption) (*compute.Operation, error)
 }
 
 type GcpCli struct {
-	cfg    *config.Config
-	client ClientInterface
+	cfg          *config.Config
+	client       ClientInterface
+	regionClient RegionalClientInterface
 }
 
 func (g GcpCli) Config() *config.Config {
@@ -114,6 +129,10 @@ func (g GcpCli) Client() ClientInterface {
 
 func (g *GcpCli) SetClient(client ClientInterface) {
 	g.client = client
+}
+
+func (g *GcpCli) SetRegionalClient(client RegionalClientInterface) {
+	g.regionClient = client
 }
 
 func (g *GcpCli) SetConfig(cfg *config.Config) {
@@ -194,6 +213,9 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 			Value: proto.String("googet -noconfirm=true install google-compute-engine-ssh"),
 		})
 	}
+	if spec.RegionalPlacement != nil {
+		return g.createRegionalInstance(ctx, spec, inst)
+	}
 
 	insertReq := &computepb.InsertInstanceRequest{
 		Project:          g.cfg.ProjectId,
@@ -214,6 +236,15 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 }
 
 func (g *GcpCli) GetInstance(ctx context.Context, instanceName string) (*computepb.Instance, error) {
+	if g.cfg.EnableRegionalPlacement {
+		if zone, name, ok := splitRegionalProviderID(instanceName); ok {
+			instance, err := g.getInstanceInZone(ctx, zone, name)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get regional instance: %w", err)
+			}
+			return instance, nil
+		}
+	}
 	req := &computepb.GetInstanceRequest{
 		Project:  g.cfg.ProjectId,
 		Zone:     g.cfg.Zone,
@@ -245,15 +276,40 @@ func (g *GcpCli) ListDescribedInstances(ctx context.Context, poolID string) ([]*
 		}
 		instances = append(instances, instance)
 	}
+	if g.cfg.EnableRegionalPlacement {
+		regional, err := g.listRegionalInstances(ctx, poolID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list regional instances: %w", err)
+		}
+		seen := make(map[string]struct{}, len(instances))
+		for _, instance := range instances {
+			seen[util.GetInstanceName(instance.GetName())] = struct{}{}
+		}
+		for _, instance := range regional {
+			if _, ok := seen[util.GetInstanceName(instance.GetName())]; ok {
+				continue
+			}
+			instances = append(instances, instance)
+		}
+	}
 
 	return instances, nil
 }
 
 func (g *GcpCli) DeleteInstance(ctx context.Context, instance string) error {
+	if g.cfg.EnableRegionalPlacement {
+		if zone, name, ok := splitRegionalProviderID(instance); ok {
+			return g.deleteInstanceInZone(ctx, zone, name)
+		}
+	}
+	return g.deleteInstanceInZone(ctx, g.cfg.Zone, instance)
+}
+
+func (g *GcpCli) deleteInstanceInZone(ctx context.Context, zone, instance string) error {
 	req := &computepb.DeleteInstanceRequest{
 		Instance: util.GetInstanceName(instance),
 		Project:  g.cfg.ProjectId,
-		Zone:     g.cfg.Zone,
+		Zone:     zone,
 	}
 
 	op, err := g.client.Delete(ctx, req)
@@ -275,10 +331,18 @@ func (g *GcpCli) DeleteInstance(ctx context.Context, instance string) error {
 }
 
 func (g *GcpCli) StopInstance(ctx context.Context, instance string) error {
+	zone := g.cfg.Zone
+	name := instance
+	if g.cfg.EnableRegionalPlacement {
+		if regionalZone, regionalName, ok := splitRegionalProviderID(instance); ok {
+			zone = regionalZone
+			name = regionalName
+		}
+	}
 	req := &computepb.StopInstanceRequest{
-		Instance: util.GetInstanceName(instance),
+		Instance: util.GetInstanceName(name),
 		Project:  g.cfg.ProjectId,
-		Zone:     g.cfg.Zone,
+		Zone:     zone,
 	}
 
 	op, err := g.client.Stop(ctx, req)
@@ -294,10 +358,18 @@ func (g *GcpCli) StopInstance(ctx context.Context, instance string) error {
 }
 
 func (g *GcpCli) StartInstance(ctx context.Context, instance string) error {
+	zone := g.cfg.Zone
+	name := instance
+	if g.cfg.EnableRegionalPlacement {
+		if regionalZone, regionalName, ok := splitRegionalProviderID(instance); ok {
+			zone = regionalZone
+			name = regionalName
+		}
+	}
 	req := &computepb.StartInstanceRequest{
-		Instance: util.GetInstanceName(instance),
+		Instance: util.GetInstanceName(name),
 		Project:  g.cfg.ProjectId,
-		Zone:     g.cfg.Zone,
+		Zone:     zone,
 	}
 
 	op, err := g.client.Start(ctx, req)
