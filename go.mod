@@ -7,7 +7,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/cloudbase/garm-provider-common v0.1.9
 	github.com/google/uuid v1.6.0
-	github.com/googleapis/gax-go/v2 v2.23.0
+	github.com/googleapis/gax-go/v2 v2.24.0
 	github.com/invopop/jsonschema v0.14.0
 	github.com/stretchr/testify v1.12.1
 	github.com/xeipuuv/gojsonschema v1.2.0
@@ -48,8 +48,8 @@ require (
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
-	google.golang.org/genproto v0.0.0-20260420184626-e10c466a9529 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260630182238-925bb5da69e7 // indirect
+	google.golang.org/genproto v0.0.0-20260715232425-e75dac1f907d // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260715232425-e75dac1f907d // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260807164820-c8921c73eeea // indirect
 	google.golang.org/grpc v1.83.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
