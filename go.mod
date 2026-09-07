@@ -1,6 +1,6 @@
 module github.com/cloudbase/garm-provider-gcp
 
-go 1.25.8
+go 1.26.0
 
 require (
 	cloud.google.com/go/compute v1.67.0
@@ -12,7 +12,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/xeipuuv/gojsonschema v1.2.0
 	golang.org/x/oauth2 v0.36.0
-	google.golang.org/api v0.295.0
+	google.golang.org/api v0.297.0
 	google.golang.org/protobuf v1.36.12
 )
 
