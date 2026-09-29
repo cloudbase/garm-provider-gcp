@@ -75,6 +75,31 @@ func TestBuildRegionalInsertRequest(t *testing.T) {
 	require.Nil(t, resource.InstanceProperties.Disks[0].InitializeParams.SourceSnapshot)
 	require.Equal(t, "true", resource.InstanceProperties.Labels[util.RegionalPlacementLabel])
 	require.Contains(t, resource.PerInstanceProperties, "garm-instance")
+	require.Nil(t, resource.InstanceProperties.Scheduling)
+}
+
+func TestBuildRegionalInsertRequestSpot(t *testing.T) {
+	runnerSpec := &spec.RunnerSpec{
+		RegionalPlacement: &spec.RegionalPlacement{
+			Zones: []string{"us-east4-a", "us-east4-b"},
+		},
+		BootstrapParams: params.BootstrapInstance{
+			Name:   "garm-instance",
+			Flavor: "c4d-standard-8-lssd",
+		},
+	}
+	instance := &computepb.Instance{
+		Name:       proto.String("garm-instance"),
+		Scheduling: spotScheduling(),
+	}
+
+	req := buildRegionalInsertRequest("my-project", runnerSpec, instance)
+	scheduling := req.BulkInsertInstanceResourceResource.InstanceProperties.Scheduling
+	require.NotNil(t, scheduling)
+	require.Equal(t, "SPOT", scheduling.GetProvisioningModel())
+	require.Equal(t, "DELETE", scheduling.GetInstanceTerminationAction())
+	require.False(t, scheduling.GetAutomaticRestart())
+	require.Equal(t, "TERMINATE", scheduling.GetOnHostMaintenance())
 }
 
 func TestSplitRegionalProviderID(t *testing.T) {

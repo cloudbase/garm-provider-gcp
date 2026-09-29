@@ -203,6 +203,10 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 		inst.NetworkInterfaces[0].AccessConfigs = nil
 	}
 
+	if spec.Spot {
+		inst.Scheduling = spotScheduling()
+	}
+
 	if spec.BootstrapParams.OSType == params.Windows && len(spec.SSHKeys) > 0 {
 		inst.Metadata.Items = append(inst.Metadata.Items, &computepb.Items{
 			Key:   proto.String("enable-windows-ssh"),
@@ -382,6 +386,18 @@ func (g *GcpCli) StartInstance(ctx context.Context, instance string) error {
 	}
 
 	return nil
+}
+
+// spotScheduling returns the scheduling options for a Spot VM. Preempted
+// runners are deleted rather than stopped, so GARM sees them disappear and
+// replaces them instead of waiting on a stopped instance.
+func spotScheduling() *computepb.Scheduling {
+	return &computepb.Scheduling{
+		ProvisioningModel:         proto.String("SPOT"),
+		InstanceTerminationAction: proto.String("DELETE"),
+		AutomaticRestart:          proto.Bool(false),
+		OnHostMaintenance:         proto.String("TERMINATE"),
+	}
 }
 
 func selectStartupScript(osType params.OSType) string {
