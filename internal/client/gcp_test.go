@@ -17,6 +17,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	compute "cloud.google.com/go/compute/apiv1"
@@ -30,6 +31,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/iterator"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -225,6 +227,11 @@ func TestGetInstance(t *testing.T) {
 }
 
 func TestListDescribedInstances(t *testing.T) {
+	previousNextIt := NextIt
+	t.Cleanup(func() {
+		NextIt = previousNextIt
+	})
+
 	ctx := context.Background()
 	mockClient := new(MockGcpClient)
 	gcpCli := &GcpCli{
@@ -272,7 +279,7 @@ func TestListDescribedInstances(t *testing.T) {
 			it++
 			return expectedInstances[it-1], nil
 		}
-		return nil, nil
+		return nil, iterator.Done
 	}
 
 	mockClient.On("List", ctx, &computepb.ListInstancesRequest{
@@ -285,6 +292,156 @@ func TestListDescribedInstances(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expectedInstances, resultInstances)
 
+}
+
+func TestListDescribedInstancesIteratorErrors(t *testing.T) {
+	type listIteratorErrorCase struct {
+		name         string
+		instances    []*computepb.Instance
+		failAt       int
+		failure      error
+		wantError    bool
+		wantLength   int
+		iteratorDone bool
+	}
+
+	cases := []listIteratorErrorCase{
+		{
+			name:      "initial failure",
+			failAt:    0,
+			failure:   errors.New("list request failed"),
+			wantError: true,
+		},
+		{
+			name: "failure after one item returns no partial inventory",
+			instances: []*computepb.Instance{
+				{Name: proto.String("garm-instance-1")},
+			},
+			failAt:    1,
+			failure:   errors.New("page request failed"),
+			wantError: true,
+		},
+		{
+			name:       "nil item without iterator completion",
+			failAt:     0,
+			wantError:  true,
+			wantLength: 0,
+		},
+		{
+			name:         "empty inventory",
+			iteratorDone: true,
+		},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			previousNextIt := NextIt
+			t.Cleanup(func() {
+				NextIt = previousNextIt
+			})
+
+			ctx := context.Background()
+			mockClient := new(MockGcpClient)
+			gcpCli := &GcpCli{
+				cfg: &config.Config{
+					Zone:      "europe-west1-d",
+					ProjectId: "my-project",
+				},
+				client: mockClient,
+			}
+			index := 0
+			NextIt = func(*compute.InstanceIterator) (*computepb.Instance, error) {
+				if index < len(testCase.instances) {
+					instance := testCase.instances[index]
+					index++
+					return instance, nil
+				}
+
+				if index == testCase.failAt {
+					index++
+					if testCase.iteratorDone {
+						return nil, iterator.Done
+					}
+
+					return nil, testCase.failure
+				}
+
+				return nil, iterator.Done
+			}
+			mockClient.On("List", ctx, mock.Anything, mock.Anything).Return(&compute.InstanceIterator{}, nil)
+
+			instances, err := gcpCli.ListDescribedInstances(ctx, "garm-pool")
+			if testCase.wantError {
+				assert.Error(t, err)
+				if testCase.failure != nil {
+					assert.ErrorIs(t, err, testCase.failure)
+				}
+
+				assert.Nil(t, instances)
+				mockClient.AssertExpectations(t)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.Len(t, instances, testCase.wantLength)
+			mockClient.AssertExpectations(t)
+		})
+	}
+}
+
+func TestListDescribedInstancesRegionalPlacement(t *testing.T) {
+	previousNextIt := NextIt
+	previousNextAggregatedIt := NextAggregatedIt
+	t.Cleanup(func() {
+		NextIt = previousNextIt
+		NextAggregatedIt = previousNextAggregatedIt
+	})
+
+	ctx := context.Background()
+	mockClient := new(MockGcpClient)
+	gcpCli := &GcpCli{
+		cfg: &config.Config{
+			Zone:                    "europe-west1-d",
+			ProjectId:               "my-project",
+			EnableRegionalPlacement: true,
+		},
+		client: mockClient,
+	}
+	zoneInstance := &computepb.Instance{Name: proto.String("zonal-instance")}
+	regionalInstance := &computepb.Instance{
+		Name:   proto.String("regional-instance"),
+		Labels: map[string]string{util.RegionalPlacementLabel: "true"},
+	}
+	zonalIndex := 0
+	NextIt = func(*compute.InstanceIterator) (*computepb.Instance, error) {
+		if zonalIndex == 0 {
+			zonalIndex++
+			return zoneInstance, nil
+		}
+
+		return nil, iterator.Done
+	}
+	aggregatedIndex := 0
+	NextAggregatedIt = func(*compute.InstancesScopedListPairIterator) (compute.InstancesScopedListPair, error) {
+		if aggregatedIndex == 0 {
+			aggregatedIndex++
+			return compute.InstancesScopedListPair{
+				Key: "zones/europe-west1-d",
+				Value: &computepb.InstancesScopedList{
+					Instances: []*computepb.Instance{regionalInstance},
+				},
+			}, nil
+		}
+
+		return compute.InstancesScopedListPair{}, iterator.Done
+	}
+	mockClient.On("List", ctx, mock.Anything, mock.Anything).Return(&compute.InstanceIterator{}, nil)
+	mockClient.On("AggregatedList", ctx, mock.Anything, mock.Anything).Return(&compute.InstancesScopedListPairIterator{}, nil)
+
+	instances, err := gcpCli.ListDescribedInstances(ctx, "garm-pool")
+	assert.NoError(t, err)
+	assert.Equal(t, []*computepb.Instance{zoneInstance, regionalInstance}, instances)
+	mockClient.AssertExpectations(t)
 }
 
 func TestDeleteInstance(t *testing.T) {

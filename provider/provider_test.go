@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/api/googleapi"
+	"google.golang.org/api/iterator"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -232,6 +233,11 @@ func TestDeleteInstance(t *testing.T) {
 }
 
 func TestListInstances(t *testing.T) {
+	previousNextIt := client.NextIt
+	t.Cleanup(func() {
+		client.NextIt = previousNextIt
+	})
+
 	ctx := context.Background()
 	mockClient := new(client.MockGcpClient)
 	poolID := "garm-pool"
@@ -325,7 +331,7 @@ func TestListInstances(t *testing.T) {
 			it++
 			return toBeIteratedInstances[it-1], nil
 		}
-		return nil, nil
+		return nil, iterator.Done
 	}
 
 	mockClient.On("List", ctx, &computepb.ListInstancesRequest{
