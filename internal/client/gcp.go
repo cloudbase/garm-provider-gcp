@@ -225,7 +225,7 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 
 	op, err := g.client.Insert(ctx, insertReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create instance %s: %w", insertReq, err)
+		return nil, fmt.Errorf("failed to create instance %s in %s/%s: %w", name, g.cfg.ProjectId, g.cfg.Zone, err)
 	}
 
 	if err = WaitOp(op, ctx); err != nil {
