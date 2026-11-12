@@ -199,6 +199,10 @@ func (g *GcpCli) CreateInstance(ctx context.Context, spec *spec.RunnerSpec) (*co
 		},
 	}
 
+	if spec.MinCpuPlatform != "" {
+		inst.MinCpuPlatform = proto.String(spec.MinCpuPlatform)
+	}
+
 	if !g.cfg.ExternalIPAccess {
 		inst.NetworkInterfaces[0].AccessConfigs = nil
 	}
