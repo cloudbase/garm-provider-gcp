@@ -163,6 +163,8 @@ type extraSpecs struct {
 	BootDiskKmsKeyName string `json:"boot_disk_kms_key_name,omitempty" jsonschema:"description=The Cloud KMS key to use for boot disk encryption. Format: projects/{project}/locations/{location}/keyRings/{keyRing}/cryptoKeys/{key}"`
 	// Regional placement options
 	RegionalPlacement *RegionalPlacement `json:"regional_placement,omitempty" jsonschema:"description=Optional regional placement using the pool's existing flavor and image."`
+	// Spot provisioning
+	Spot bool `json:"spot,omitempty" jsonschema:"description=Create the VM with the SPOT provisioning model. Preempted instances are deleted."`
 	// The Cloudconfig struct from common package
 	cloudconfig.CloudConfigSpec
 }
@@ -230,6 +232,8 @@ type RunnerSpec struct {
 	BootDiskKmsKeyName string
 	// Regional placement options
 	RegionalPlacement *RegionalPlacement
+	// Spot provisioning
+	Spot bool
 }
 
 func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
@@ -288,6 +292,9 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	}
 	if extraSpecs.RegionalPlacement != nil {
 		r.RegionalPlacement = extraSpecs.RegionalPlacement
+	}
+	if extraSpecs.Spot {
+		r.Spot = extraSpecs.Spot
 	}
 }
 

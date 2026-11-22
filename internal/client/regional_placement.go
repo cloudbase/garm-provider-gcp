@@ -125,6 +125,7 @@ func buildRegionalInsertRequest(project string, runnerSpec *spec.RunnerSpec, ins
 				Labels:                 inst.Labels,
 				Metadata:               inst.Metadata,
 				NetworkInterfaces:      inst.NetworkInterfaces,
+				Scheduling:             inst.Scheduling,
 				ServiceAccounts:        inst.ServiceAccounts,
 				ShieldedInstanceConfig: inst.ShieldedInstanceConfig,
 				Tags:                   inst.Tags,

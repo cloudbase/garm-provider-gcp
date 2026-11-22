@@ -51,6 +51,7 @@ func TestJsonSchemaValidation(t *testing.T) {
 				"ssh_keys": ["ssh-key", "ssh-key2"],
 				"enable_boot_debug": true,
 				"disable_updates": false,
+				"spot": true,
 				"runner_install_template": "IyEvYmluL2Jhc2gKZWNobyBJbnN0YWxsaW5nIHJ1bm5lci4uLg==", "pre_install_scripts": {"setup.sh": "IyEvYmluL2Jhc2gKZWNobyBTZXR1cCBzY3JpcHQuLi4="}, "extra_context": {"key": "value"}
 				}`),
 			errString: "",
