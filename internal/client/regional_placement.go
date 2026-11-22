@@ -222,10 +222,11 @@ func (g *GcpCli) waitForInstanceInZones(ctx context.Context, name string, zones 
 
 func (g *GcpCli) listRegionalInstances(ctx context.Context, poolID string) ([]*computepb.Instance, error) {
 	filter := fmt.Sprintf("labels.garmpoolid=%s AND labels.%s=true", poolID, util.RegionalPlacementLabel)
+	// Compute v1 retired the returnPartialSuccess parameter; aggregated lists
+	// now always tolerate unreachable scopes, so we no longer request it.
 	req := &computepb.AggregatedListInstancesRequest{
-		Project:              g.cfg.ProjectId,
-		Filter:               &filter,
-		ReturnPartialSuccess: proto.Bool(true),
+		Project: g.cfg.ProjectId,
+		Filter:  &filter,
 	}
 
 	it := g.client.AggregatedList(ctx, req)
