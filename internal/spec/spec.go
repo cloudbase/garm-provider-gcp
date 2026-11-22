@@ -148,6 +148,7 @@ type extraSpecs struct {
 	NetworkID       string                      `json:"network_id,omitempty" jsonschema:"description=The name of the network attached to the instance."`
 	SubnetworkID    string                      `json:"subnetwork_id,omitempty" jsonschema:"description=The name of the subnetwork attached to the instance."`
 	NicType         string                      `json:"nic_type,omitempty" jsonschema:"description=The type of the network interface card. Default is VIRTIO_NET."`
+	MinCpuPlatform  string                      `json:"min_cpu_platform,omitempty" jsonschema:"description=The minimum CPU platform for the VM, e.g. AMD Milan or Intel Ice Lake."`
 	CustomLabels    map[string]string           `json:"custom_labels,omitempty" jsonschema:"description=Custom labels to apply to the instance. Each label is a key-value pair where both key and value are strings."`
 	NetworkTags     []string                    `json:"network_tags,omitempty" jsonschema:"description=A list of network tags to be attached to the instance"`
 	ServiceAccounts []*computepb.ServiceAccount `json:"service_accounts,omitempty" jsonschema:"description=A list of service accounts to be attached to the instance"`
@@ -212,6 +213,7 @@ type RunnerSpec struct {
 	SubnetworkID    string
 	ControllerID    string
 	NicType         string
+	MinCpuPlatform  string
 	DisplayDevice   bool
 	DiskSize        int64
 	DiskType        string
@@ -250,6 +252,9 @@ func (r *RunnerSpec) MergeExtraSpecs(extraSpecs *extraSpecs) {
 	}
 	if extraSpecs.NicType != "" {
 		r.NicType = extraSpecs.NicType
+	}
+	if extraSpecs.MinCpuPlatform != "" {
+		r.MinCpuPlatform = extraSpecs.MinCpuPlatform
 	}
 	if len(extraSpecs.CustomLabels) > 0 {
 		maps.Copy(r.CustomLabels, extraSpecs.CustomLabels)

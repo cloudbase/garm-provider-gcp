@@ -131,6 +131,10 @@ To this end, this provider supports the following extra specs schema:
             "type": "string",
             "description": "The type of NIC attached to the instance. Default is VIRTIO_NET."
         },
+        "min_cpu_platform": {
+            "type": "string",
+            "description": "The minimum CPU platform for the VM, e.g. AMD Milan or Intel Ice Lake."
+        },
         "custom_labels":{
             "type": "object",
             "description": "Custom labels to be attached to the instance. Each label is a key-value pair where both key and value are strings.",
@@ -222,6 +226,7 @@ An example of extra specs json would look like this:
     "network_id": "projects/garm-testing/global/networks/garm-2",
     "subnetwork_id": "projects/garm-testing/regions/europe-west1/subnetworks/garm",
     "nic_type": "VIRTIO_NET",
+    "min_cpu_platform": "AMD Milan",
     "custom_labels": {"environment":"production","project":"myproject"},
     "network_tags": ["web-server", "production"],
     "service_accounts": [{"email":"email@email.com", "scopes":["https://www.googleapis.com/auth/devstorage.read_only", "https://www.googleapis.com/auth/logging.write"]}],

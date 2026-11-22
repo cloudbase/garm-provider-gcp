@@ -98,6 +98,13 @@ func TestJsonSchemaValidation(t *testing.T) {
 			errString: "",
 		},
 		{
+			name: "Specs just with min_cpu_platform",
+			input: json.RawMessage(`{
+				"min_cpu_platform": "AMD Milan"
+			}`),
+			errString: "",
+		},
+		{
 			name: "Specs just with custom_labels",
 			input: json.RawMessage(`{
 				"custom_labels": {
@@ -329,14 +336,15 @@ func TestMergeExtraSpecs(t *testing.T) {
 		{
 			name: "ValidExtraSpecs",
 			extraSpecs: &extraSpecs{
-				NetworkID:     "projects/garm-testing/global/networks/garm-2",
-				SubnetworkID:  "projects/garm-testing/regions/europe-west1/subnetworks/garm",
-				DisplayDevice: true,
-				DiskSize:      100,
-				DiskType:      "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd",
-				NicType:       "VIRTIO_NET",
-				CustomLabels:  map[string]string{"key1": "value1"},
-				NetworkTags:   []string{"tag1", "tag2"},
+				NetworkID:      "projects/garm-testing/global/networks/garm-2",
+				SubnetworkID:   "projects/garm-testing/regions/europe-west1/subnetworks/garm",
+				DisplayDevice:  true,
+				DiskSize:       100,
+				DiskType:       "projects/garm-testing/zones/europe-west1/diskTypes/pd-ssd",
+				NicType:        "VIRTIO_NET",
+				MinCpuPlatform: "AMD Milan",
+				CustomLabels:   map[string]string{"key1": "value1"},
+				NetworkTags:    []string{"tag1", "tag2"},
 				ServiceAccounts: []*computepb.ServiceAccount{
 					{
 						Email:  proto.String("email"),
@@ -407,6 +415,9 @@ func TestMergeExtraSpecs(t *testing.T) {
 				if spec.NicType != tt.extraSpecs.NicType {
 					assert.Equal(t, tt.extraSpecs.NicType, spec.NicType, "expected NicType to be %s, got %s", tt.extraSpecs.NicType, spec.NicType)
 				}
+			}
+			if tt.extraSpecs.MinCpuPlatform != "" {
+				assert.Equal(t, tt.extraSpecs.MinCpuPlatform, spec.MinCpuPlatform)
 			}
 			if len(tt.extraSpecs.CustomLabels) > 0 {
 				for k, v := range tt.extraSpecs.CustomLabels {
