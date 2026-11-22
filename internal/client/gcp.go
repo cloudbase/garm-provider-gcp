@@ -17,6 +17,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/googleapis/gax-go/v2/apierror"
 	"golang.org/x/oauth2/google"
 	gcompute "google.golang.org/api/compute/v1"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/proto"
 )
@@ -270,10 +272,19 @@ func (g *GcpCli) ListDescribedInstances(ctx context.Context, poolID string) ([]*
 	it := g.client.List(ctx, req)
 	var instances []*computepb.Instance
 	for {
-		instance, _ := NextIt(it)
-		if instance == nil {
+		instance, err := NextIt(it)
+		if errors.Is(err, iterator.Done) {
 			break
 		}
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to list instances: %w", err)
+		}
+
+		if instance == nil {
+			return nil, fmt.Errorf("failed to list instances: iterator returned nil instance without completion")
+		}
+
 		instances = append(instances, instance)
 	}
 	if g.cfg.EnableRegionalPlacement {
